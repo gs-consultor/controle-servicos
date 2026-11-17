@@ -2,7 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f3436">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GS Serviços">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Gustavo Soares — Controle de Serviços</title>
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -145,6 +150,22 @@ td.num,th.num{text-align:right;white-space:nowrap}
 .gbtn:hover{background:#f8fafc}
 .gbtn svg{width:20px;height:20px}
 #login-msg{color:var(--danger);font-size:13px;margin-top:14px;min-height:18px}
+.lform{display:flex;flex-direction:column;gap:10px;text-align:left}
+.lform input{border:1px solid #d1d5db;border-radius:10px;padding:12px 14px;font-size:16px;width:100%}
+.lform input:focus{outline:2px solid var(--brand-2);border-color:transparent}
+.btn.big{padding:12px;font-size:15px;justify-content:center;width:100%}
+.links{margin-top:14px;font-size:13px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;align-items:center}
+.lnk{border:0;background:none;color:var(--brand);font-weight:700;cursor:pointer;padding:4px;font-size:13px}
+.pin-t{margin:0 0 14px!important}
+.pin-dots{display:flex;justify-content:center;gap:14px;margin:6px 0 18px}
+.pin-dots span{width:16px;height:16px;border-radius:50%;border:2px solid var(--brand);display:block}
+.pin-dots span.on{background:var(--brand)}
+.pin-dots.shake{animation:shk .35s}
+@keyframes shk{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.pin-pad{display:grid;grid-template-columns:repeat(3,72px);gap:12px;justify-content:center}
+.pin-pad button{height:60px;border-radius:50%;border:1px solid var(--line);background:#f8fafc;font-size:22px;font-weight:700;cursor:pointer;color:var(--ink);-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.pin-pad button:active{background:var(--brand-soft)}
+.login-box .pin-logo{width:64px;height:64px;margin:0 auto 10px;display:block;border-radius:14px}
 .spin{width:28px;height:28px;border:3px solid #e5e7eb;border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite;margin:6px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
 #sync{position:fixed;top:10px;right:14px;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--muted);z-index:45;box-shadow:var(--shadow)}
@@ -160,7 +181,12 @@ td.num,th.num{text-align:right;white-space:nowrap}
   .kpis{grid-template-columns:1fr 1fr}
   .two,.kanban{grid-template-columns:1fr}
   .fields{grid-template-columns:1fr}
-  .timerbar{bottom:78px;right:10px;left:10px;max-width:none}
+  .timerbar{bottom:calc(78px + env(safe-area-inset-bottom));right:10px;left:10px;max-width:none}
+  aside{padding-bottom:calc(6px + env(safe-area-inset-bottom))}
+  main{padding-top:calc(16px + env(safe-area-inset-top))}
+  input,select,textarea{font-size:16px!important}
+  #sync{top:calc(8px + env(safe-area-inset-top))}
+  .modal-bg{padding:20px 10px}
   .timerbar .info{max-width:none;flex:1}
   .invoice{padding:18px}
   .kpi .value{font-size:20px}
@@ -180,7 +206,8 @@ td.num,th.num{text-align:right;white-space:nowrap}
     <button class="nav-btn" data-view="projetos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Projetos</button>
     <button class="nav-btn" data-view="horas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>Horas</button>
     <button class="nav-btn" data-view="cobranca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>Cobrança</button>
-    <div class="aside-foot"><div class="user-line" id="user-line"></div><button class="btn sm" onclick="sair()">Sair</button></div>
+    <button class="nav-btn nav-admin" data-view="equipe" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6.1 4.6 1.8 5.3 5.4"/></svg>Equipe</button>
+    <div class="aside-foot"><div class="user-line" id="user-line"></div><button class="btn sm" style="margin-bottom:6px" onclick="telaCriarPin(true)">Trocar PIN</button><button class="btn sm" onclick="sair()">Sair</button></div>
   </aside>
   <main id="main"></main>
 </div>
@@ -207,57 +234,173 @@ const firebaseConfig={apiKey:"AIzaSyBmJTJqFtNDBjhsjsw-yCVR4Rqv93Si_kQ",authDomai
 firebase.initializeApp(firebaseConfig);
 const auth=firebase.auth(), db=firebase.firestore();
 const DONO='gstsoares27@gmail.com';
+const APP_URL=location.origin+location.pathname;
 const COLS=['projetos','demandas','lancamentos'];
+const PIN_LEN=4, PIN_MAX_TENT=5, BLOQUEIO_MIN=5;
 let S=null, synced=null, saving=Promise.resolve(), pendente=false;
-function vazio(){return {perfil:{nome:'62.019.887 GUSTAVO SOARES DE OLIVEIRA',doc:'CNPJ 62.019.887/0001-17',email:'',pix:'PIX — chave CNPJ 62.019.887/0001-17'},projetos:[],demandas:[],lancamentos:[],timer:null}}
+let EU=null, syncedTimer='null';
+const isAdmin=()=>!!EU&&(EU.papel==='admin'||EU.email===DONO);
+function vazio(){return {perfil:{nome:'62.019.887 GUSTAVO SOARES DE OLIVEIRA',doc:'CNPJ 62.019.887/0001-17',email:'',pix:'PIX — chave CNPJ 62.019.887/0001-17'},projetos:[],demandas:[],lancamentos:[],usuarios:[],timer:null}}
 async function carregar(){
   const st=vazio(); const sy={projetos:{},demandas:{},lancamentos:{},config:null};
   const snaps=await Promise.all(COLS.map(c=>db.collection(c).get()));
   COLS.forEach((c,i)=>snaps[i].forEach(d=>{const o={id:d.id,...d.data()};st[c].push(o);sy[c][d.id]=JSON.stringify(o)}));
   const cfg=await db.collection('config').doc('geral').get();
-  if(cfg.exists){const d=cfg.data();if(d.perfil)st.perfil=d.perfil;st.timer=d.timer||null;sy.config=JSON.stringify({perfil:st.perfil,timer:st.timer})}
+  if(cfg.exists){const d=cfg.data();if(d.perfil)st.perfil=d.perfil;sy.config=JSON.stringify({perfil:st.perfil})}
+  if(isAdmin()){const us=await db.collection('usuarios').get();us.forEach(d=>st.usuarios.push({email:d.id,...d.data()}))}
+  st.timer=EU.timer||null;syncedTimer=JSON.stringify(st.timer);
   S=st;synced=sy;
 }
 function setSync(t){const el=document.getElementById('sync');el.style.display='block';el.classList.toggle('err',t==='erro');el.textContent={ok:'✓ Salvo',pendente:'Salvando…',erro:'⚠ Erro ao salvar — verifique a internet'}[t]}
 function save(){pendente=true;setSync('pendente');clearTimeout(save._t);save._t=setTimeout(()=>{saving=saving.then(flush).catch(e=>{console.error(e);setSync('erro');toast('Erro ao salvar: '+(e.code||e.message))})},350)}
 async function flush(){
-  if(!S)return;
+  if(!S||!EU)return;
   const ops=[];const novo={};
   for(const c of COLS){novo[c]={};
     for(const o of S[c]){const j=JSON.stringify(o);novo[c][o.id]=j;
       if(synced[c][o.id]!==j){const {id,...rest}=JSON.parse(j);const ref=db.collection(c).doc(o.id);ops.push(b=>b.set(ref,rest))}}
     for(const id in synced[c]) if(!(id in novo[c])){const ref=db.collection(c).doc(id);ops.push(b=>b.delete(ref))}}
-  const cj=JSON.stringify({perfil:S.perfil,timer:S.timer||null});novo.config=cj;
+  const cj=JSON.stringify({perfil:S.perfil});novo.config=cj;
   if(cj!==synced.config){const ref=db.collection('config').doc('geral');ops.push(b=>b.set(ref,JSON.parse(cj)))}
+  const tj=JSON.stringify(S.timer||null);
+  if(tj!==syncedTimer){const ref=db.collection('usuarios').doc(EU.email);ops.push(b=>b.set(ref,{timer:JSON.parse(tj)},{merge:true}))}
   for(let i=0;i<ops.length;i+=400){const b=db.batch();ops.slice(i,i+400).forEach(f=>f(b));await b.commit()}
-  synced=novo;pendente=false;setSync('ok');
+  synced=novo;syncedTimer=tj;pendente=false;setSync('ok');
 }
 window.addEventListener('beforeunload',e=>{if(pendente){e.preventDefault();e.returnValue=''}});
 
-/* ================= Login ================= */
-let loginMsg='';
-const GICON='<svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
-function telaLogin(msg){
-  document.getElementById('login').classList.remove('hide');
-  document.getElementById('login-body').innerHTML=`<p>Controle de projetos, horas e cobranças.<br>Acesso restrito.</p><button class="gbtn" onclick="entrar()">${GICON} Entrar com Google</button>`;
-  document.getElementById('login-msg').textContent=msg||'';
+/* ================= Login: e-mail + senha, primeiro acesso, PIN ================= */
+let loginMsg='', acabouDeEntrar=false, escondidoEm=0;
+const L=id=>document.getElementById(id);
+function caixa(html,msg,ok){L('login').classList.remove('hide');L('login-body').innerHTML=html;msgLogin(msg||'',ok)}
+function msgLogin(t,ok){const m=L('login-msg');m.textContent=t||'';m.style.color=ok?'var(--ok)':''}
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{v===null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}
+const ERROS={'auth/invalid-credential':'E-mail ou senha incorretos.','auth/wrong-password':'E-mail ou senha incorretos.','auth/user-not-found':'E-mail ou senha incorretos.','auth/invalid-email':'E-mail inválido.','auth/too-many-requests':'Muitas tentativas. Aguarde alguns minutos ou use "Esqueci minha senha".','auth/network-request-failed':'Sem conexão com a internet.','auth/user-disabled':'Usuário desativado.'};
+const msgErro=e=>ERROS[e.code]||('Erro: '+(e.code||e.message));
+
+function telaLogin(msg,ok){
+  const email=lsGet('gs-ultimo-email')||'';
+  caixa(`<form class="lform" onsubmit="event.preventDefault();entrar()">
+    <input id="lg-email" type="email" inputmode="email" placeholder="E-mail" autocomplete="username" value="${esc(email)}" required>
+    <input id="lg-senha" type="password" placeholder="Senha" autocomplete="current-password" required>
+    <button class="btn primary big" id="lg-btn" type="submit">Entrar</button></form>
+    <div class="links"><button class="lnk" onclick="telaPrimeiro()">Primeiro acesso</button><span class="muted">·</span><button class="lnk" onclick="esqueci()">Esqueci minha senha</button></div>`,msg,ok);
 }
-function telaCarregando(){document.getElementById('login').classList.remove('hide');document.getElementById('login-body').innerHTML='<div class="spin"></div><p>Carregando seus dados…</p>';document.getElementById('login-msg').textContent=''}
-function entrar(){
-  const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});
-  auth.signInWithPopup(p).catch(e=>{
-    if(e.code==='auth/popup-blocked'){document.getElementById('login-msg').textContent='O navegador bloqueou a janela de login. Permita pop-ups para este site e tente de novo.';return}
-    if(e.code==='auth/operation-not-supported-in-this-environment')return auth.signInWithRedirect(p);
-    if(e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')document.getElementById('login-msg').textContent='Não foi possível entrar: '+(e.code||e.message);
-  });
+function telaCarregando(t){caixa(`<div class="spin"></div><p>${t||'Carregando seus dados…'}</p>`)}
+async function entrar(){
+  const email=L('lg-email').value.trim().toLowerCase(), senha=L('lg-senha').value;
+  if(!email||!senha){msgLogin('Preencha e-mail e senha.');return}
+  L('lg-btn').disabled=true;L('lg-btn').textContent='Entrando…';
+  try{acabouDeEntrar=true;lsSet('gs-ultimo-email',email);await auth.signInWithEmailAndPassword(email,senha)}
+  catch(e){acabouDeEntrar=false;msgLogin(msgErro(e));L('lg-btn').disabled=false;L('lg-btn').textContent='Entrar'}
 }
-async function sair(){try{clearTimeout(save._t);if(pendente)await flush()}catch(e){}S=null;await auth.signOut()}
-auth.onAuthStateChanged(async u=>{
-  if(!u){clearInterval(tick);document.getElementById('timerbar').style.display='none';document.getElementById('sync').style.display='none';telaLogin(loginMsg);loginMsg='';return}
-  if((u.email||'').toLowerCase()!==DONO){loginMsg=`A conta ${u.email} não tem acesso a este painel.`;await auth.signOut();return}
+function telaPrimeiro(){
+  const email=(L('lg-email')&&L('lg-email').value)||lsGet('gs-ultimo-email')||'';
+  caixa(`<p><b>Primeiro acesso</b><br>Digite o e-mail cadastrado pelo administrador. Você receberá um link para criar sua senha.</p>
+    <form class="lform" onsubmit="event.preventDefault();primeiroAcesso()">
+    <input id="pa-email" type="email" inputmode="email" placeholder="Seu e-mail" autocomplete="username" value="${esc(email)}" required>
+    <button class="btn primary big" id="pa-btn" type="submit">Enviar link para criar senha</button></form>
+    <div class="links"><button class="lnk" onclick="telaLogin()">← Voltar</button></div>`);
+}
+function senhaAleatoria(){const a=new Uint8Array(24);crypto.getRandomValues(a);return [...a].map(x=>'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%'[x%61]).join('')}
+async function primeiroAcesso(){
+  const email=L('pa-email').value.trim().toLowerCase();if(!email){msgLogin('Digite seu e-mail.');return}
+  L('pa-btn').disabled=true;L('pa-btn').textContent='Enviando…';
+  try{
+    const aux=(firebase.apps||[]).find(a=>a.name==='aux')||firebase.initializeApp(firebaseConfig,'aux');
+    try{await aux.auth().createUserWithEmailAndPassword(email,senhaAleatoria());await aux.auth().signOut()}
+    catch(e){if(e.code!=='auth/email-already-in-use')throw e}
+    await auth.sendPasswordResetEmail(email,{url:APP_URL});
+    lsSet('gs-ultimo-email',email);
+    telaLogin(`Pronto! Enviamos um link para ${email}. Abra o e-mail (veja também o spam), crie sua senha e volte aqui para entrar.`,true);
+  }catch(e){telaPrimeiro();msgLogin(msgErro(e))}
+}
+async function esqueci(){
+  const email=((L('lg-email')&&L('lg-email').value)||'').trim().toLowerCase();
+  if(!email){msgLogin('Digite seu e-mail no campo acima e clique de novo em "Esqueci minha senha".');return}
+  try{await auth.sendPasswordResetEmail(email,{url:APP_URL});msgLogin(`Se ${email} estiver cadastrado, você receberá um link para criar uma nova senha.`,true)}
+  catch(e){msgLogin(msgErro(e))}
+}
+function telaVerificar(u){
+  caixa(`<p><b>Confirme seu e-mail</b><br>Enviamos um link de confirmação para <b>${esc(u.email)}</b>. Clique nele e depois volte aqui.</p>
+    <div class="lform"><button class="btn primary big" onclick="jaConfirmei()">Já confirmei</button>
+    <button class="btn big" onclick="reenviarConfirmacao()">Reenviar e-mail</button></div>
+    <div class="links"><button class="lnk" onclick="sair()">Sair</button></div>`);
+  if(!sessionStorageGet('gs-verif-'+u.uid)){u.sendEmailVerification({url:APP_URL}).catch(()=>{});sessionStorageSet('gs-verif-'+u.uid,'1')}
+}
+function sessionStorageGet(k){try{return sessionStorage.getItem(k)}catch(e){return null}}
+function sessionStorageSet(k,v){try{sessionStorage.setItem(k,v)}catch(e){}}
+async function reenviarConfirmacao(){try{await auth.currentUser.sendEmailVerification({url:APP_URL});msgLogin('E-mail reenviado.',true)}catch(e){msgLogin(msgErro(e))}}
+async function jaConfirmei(){const u=auth.currentUser;await u.reload();if(!u.emailVerified){msgLogin('Ainda não aparece como confirmado. Abra o link do e-mail e tente de novo.');return}await u.getIdToken(true);iniciar(u)}
+
+/* ---- PIN ---- */
+let pinBuf='', pinModo=null, pinPrimeiro='', pinVoltar=false;
+async function hashPin(pin){const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(EU.email+'|'+pin+'|gs-pin'));return [...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+function telaPinBase(titulo,sub,rodape){
+  pinBuf='';
+  caixa(`<img class="pin-logo" src="${document.querySelector('.logo-mark').src}" alt="">
+    <p class="pin-t"><b>${titulo}</b><br><span class="muted">${sub}</span></p>
+    <div class="pin-dots" id="pin-dots">${'<span></span>'.repeat(PIN_LEN)}</div>
+    <div class="pin-pad">${['1','2','3','4','5','6','7','8','9','','0','⌫'].map(k=>k===''?'<span></span>':`<button type="button" onclick="pinTecla('${k}')" aria-label="${k==='⌫'?'Apagar':k}">${k}</button>`).join('')}</div>
+    <div class="links">${rodape}</div>`);
+}
+function telaPin(){pinModo='entrar';telaPinBase(`Olá, ${esc((EU.nome||'').split(' ')[0]||'')}`,'Digite seu PIN',`<button class="lnk" onclick="esqueciPin()">Esqueci o PIN · entrar com senha</button>`)}
+function telaCriarPin(trocar){pinModo='criar1';pinVoltar=!!trocar;telaPinBase(trocar?'Novo PIN':'Crie seu PIN',`${PIN_LEN} números para desbloquear o app rapidamente`,trocar?`<button class="lnk" onclick="abrir()">Cancelar</button>`:`<button class="lnk" onclick="sair()">Sair</button>`)}
+function pinDots(cls){const el=L('pin-dots');if(!el)return;el.innerHTML=[...Array(PIN_LEN)].map((_,i)=>`<span class="${i<pinBuf.length?'on':''}"></span>`).join('');if(cls){el.classList.remove('shake');void el.offsetWidth;el.classList.add('shake')}}
+function pinTecla(k){
+  if(k==='⌫')pinBuf=pinBuf.slice(0,-1);else if(pinBuf.length<PIN_LEN)pinBuf+=k;
+  pinDots();if(pinBuf.length===PIN_LEN)setTimeout(pinCompleto,120);
+}
+document.addEventListener('keydown',e=>{if(!pinModo||L('login').classList.contains('hide'))return;if(/^[0-9]$/.test(e.key))pinTecla(e.key);else if(e.key==='Backspace')pinTecla('⌫')});
+async function pinCompleto(){
+  const pin=pinBuf;
+  if(pinModo==='criar1'){pinPrimeiro=pin;pinModo='criar2';pinBuf='';pinDots();L('login-body').querySelector('.pin-t').innerHTML='<b>Confirme o PIN</b><br><span class="muted">Digite os mesmos números de novo</span>';return}
+  if(pinModo==='criar2'){
+    if(pin!==pinPrimeiro){pinModo='criar1';pinBuf='';pinDots(true);L('login-body').querySelector('.pin-t').innerHTML='<b>Os PINs não conferem</b><br><span class="muted">Crie o PIN novamente</span>';return}
+    const h=await hashPin(pin);
+    try{await db.collection('usuarios').doc(EU.email).set({pinHash:h},{merge:true});EU.pinHash=h;lsSet('gs-pin-tent',null);pinModo=null;abrir();toast('PIN salvo')}
+    catch(e){msgLogin('Não foi possível salvar o PIN: '+(e.code||e.message))}
+    return;
+  }
+  if(pinModo==='entrar'){
+    const h=await hashPin(pin);
+    if(h===EU.pinHash){lsSet('gs-pin-tent',null);pinModo=null;abrir();return}
+    const t=(+lsGet('gs-pin-tent')||0)+1;lsSet('gs-pin-tent',String(t));pinBuf='';pinDots(true);
+    if(t>=PIN_MAX_TENT){lsSet('gs-pin-tent',null);loginMsg='PIN incorreto várias vezes. Entre com sua senha.';sair();return}
+    msgLogin(`PIN incorreto. ${PIN_MAX_TENT-t} tentativa(s) restante(s).`);
+  }
+}
+function esqueciPin(){loginMsg='Entre com sua senha. Depois você pode criar um novo PIN em "Trocar PIN".';sair()}
+function abrir(){pinModo=null;L('login').classList.add('hide');setSync(pendente?'pendente':'ok');render()}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){escondidoEm=Date.now();return}
+  if(S&&EU&&EU.pinHash&&escondidoEm&&!pinModo&&Date.now()-escondidoEm>BLOQUEIO_MIN*60000){closeModal();telaPin()}
+  escondidoEm=0;
+});
+function aplicarNav(){document.querySelectorAll('.nav-admin').forEach(b=>b.style.display=isAdmin()?'':'none');L('user-line').textContent=(EU.nome?EU.nome+' · ':'')+EU.email}
+function resetApp(){S=null;EU=null;pinModo=null;clearInterval(tick);L('timerbar').style.display='none';L('sync').style.display='none';closeModal()}
+async function sair(){try{clearTimeout(save._t);if(pendente)await flush()}catch(e){}resetApp();await auth.signOut()}
+
+async function iniciar(u){
   telaCarregando();
-  try{await carregar();document.getElementById('user-line').textContent=u.email;document.getElementById('login').classList.add('hide');setSync('ok');render()}
-  catch(e){console.error(e);telaLogin('Erro ao carregar os dados: '+(e.code||e.message))}
+  try{
+    const email=(u.email||'').toLowerCase();
+    const ref=db.collection('usuarios').doc(email);
+    let doc=await ref.get();
+    if(!doc.exists&&email===DONO){await ref.set({nome:'Gustavo Soares',papel:'admin',ativo:true,criadoEm:new Date().toISOString()});doc=await ref.get()}
+    if(!doc.exists||doc.data().ativo===false){loginMsg=`O e-mail ${email} não tem acesso a este painel. Fale com o administrador.`;acabouDeEntrar=false;await auth.signOut();return}
+    EU={email,...doc.data()};
+    ref.set({ultimoAcesso:new Date().toISOString()},{merge:true}).catch(()=>{});
+    await carregar();aplicarNav();
+    if(!EU.pinHash)telaCriarPin();else if(acabouDeEntrar)abrir();else telaPin();
+    acabouDeEntrar=false;
+  }catch(e){console.error(e);acabouDeEntrar=false;telaLogin('Erro ao carregar os dados: '+(e.code||e.message))}
+}
+auth.onAuthStateChanged(u=>{
+  if(!u){resetApp();telaLogin(loginMsg);loginMsg='';return}
+  if(!u.emailVerified){telaVerificar(u);return}
+  iniciar(u);
 });
 
 let tick=null;
@@ -323,7 +466,7 @@ document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>go(b.dataset.view
 function render(){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===(view==='projeto'?'projetos':view)));
   const m=$('#main');
-  m.innerHTML=({painel:vPainel,projetos:vProjetos,projeto:vProjeto,horas:vHoras,cobranca:vCobranca})[view]();
+  m.innerHTML=({painel:vPainel,projetos:vProjetos,projeto:vProjeto,horas:vHoras,cobranca:vCobranca,equipe:vEquipe})[view]();
   renderTimer();
 }
 
@@ -340,7 +483,7 @@ function vPainel(){
   const demAbertas=S.demandas.filter(d=>d.status!=='concluida').sort((a,b)=>({alta:0,media:1,baixa:2}[a.prioridade]-{alta:0,media:1,baixa:2}[b.prioridade])).slice(0,6);
   return `
   <div class="top"><div><h1>Painel</h1><div class="sub">${esc(mesNome(mes))} · visão geral dos seus serviços</div></div>
-    <div class="row wrap"><button class="btn" onclick="sair()">Sair</button><button class="btn primary" onclick="modalTimer()">${ICON.play} Iniciar cronômetro</button></div></div>
+    <div class="row wrap"><button class="btn" onclick="telaCriarPin(true)">Trocar PIN</button><button class="btn" onclick="sair()">Sair</button><button class="btn primary" onclick="modalTimer()">${ICON.play} Iniciar cronômetro</button></div></div>
   <div class="grid kpis">
     <div class="card kpi"><div class="label">Horas no mês</div><div class="value">${hm(min)}</div><div class="hint">${lm.length} lançamentos</div></div>
     <div class="card kpi"><div class="label">A faturar (mês)</div><div class="value">${brl(aFaturar)}</div><div class="hint">projetos ativos, não faturado</div></div>
@@ -438,7 +581,7 @@ function tabelaLanc(ls,mostrarProj){
   ${ls.map(l=>{const p=proj(l.projetoId),d=dem(l.demandaId);return `<tr>
     <td style="white-space:nowrap">${fdata(l.inicio)}<div class="muted" style="font-size:12px">${fhora(l.inicio)}</div></td>
     ${mostrarProj?`<td><span class="dot" style="display:inline-block;background:${p?.cor||'#999'};margin-right:6px"></span>${esc(p?.nome||'—')}</td>`:''}
-    <td><b>${esc(d?.titulo||'Geral')}</b><div class="muted" style="font-size:12.5px">${esc(l.descricao||'')}</div></td>
+    <td><b>${esc(d?.titulo||'Geral')}</b><div class="muted" style="font-size:12.5px">${esc(l.descricao||'')}</div>${l.usuario?`<div class="muted" style="font-size:11.5px">por ${esc(l.usuario)}</div>`:''}</td>
     <td><span class="tag ${l.modalidade==='presencial'?'amber':'blue'}">${l.modalidade==='presencial'?'Presencial':'Remoto'}</span>${l.faturado?' <span class="tag green">Faturado</span>':''}</td>
     <td class="num mono" style="font-weight:700">${hm(l.minutos)}</td>
     <td class="num"><button class="btn icon sm" onclick="modalLanc('${l.id}')">${ICON.edit}</button></td></tr>`}).join('')}</tbody></table></div>`;
@@ -477,7 +620,7 @@ function vCobranca(){
     <div class="field"><label>Competência</label><select onchange="go('cobranca',{pid:'${p.id}',mes:this.value})">${opcoesMes(mes,false)}</select></div>
     <label class="row" style="padding-bottom:10px;font-weight:600;font-size:13px"><input type="checkbox" ${incluirFat?'checked':''} onchange="go('cobranca',{pid:'${p.id}',mes:'${mes}',fat:this.checked})"> Incluir já faturados</label>
     <div class="row" style="margin-left:auto;padding-bottom:2px">
-      <button class="btn" onclick="modalPerfil()">Meus dados</button>
+      ${isAdmin()?'<button class="btn" onclick="modalPerfil()">Meus dados</button>':''}
       <button class="btn" onclick="copiarCobranca()">Copiar texto</button>
       <button class="btn" onclick="imprimir()">Imprimir / PDF</button>
       <button class="btn primary" onclick="marcarFaturado('${p.id}','${mes}')">Marcar como faturado</button></div>
@@ -509,6 +652,52 @@ function vCobranca(){
     <div class="inv-box" style="margin-top:20px"><b>Pagamento:</b> ${esc(S.perfil.pix)} · Deslocamento cobrado por visita presencial; tempo de trajeto não é contabilizado como hora técnica. Reuniões online e suporte remoto entram como horas trabalhadas.</div>
   </div>`;
 }
+
+/* ================= Equipe (admin) ================= */
+function vEquipe(){
+  if(!isAdmin())return '<div class="card empty">Acesso restrito ao administrador.</div>';
+  const us=[...S.usuarios].sort((a,b)=>(a.nome||a.email).localeCompare(b.nome||b.email));
+  return `<div class="top"><div><h1>Equipe</h1><div class="sub">Quem pode acessar o painel</div></div>
+    <button class="btn primary" onclick="modalUsuario()">${ICON.plus} Novo usuário</button></div>
+  <div class="card" style="padding:6px 12px"><div class="table-wrap"><table><thead><tr><th>Nome</th><th>Perfil</th><th>Situação</th><th>Último acesso</th><th></th></tr></thead><tbody>
+  ${us.map(u=>`<tr><td><b>${esc(u.nome||'—')}</b><div class="muted" style="font-size:12.5px">${esc(u.email)}</div></td>
+    <td><span class="tag ${u.papel==='admin'?'teal':''}">${u.papel==='admin'?'Administrador':'Membro'}</span></td>
+    <td>${u.ativo===false?'<span class="tag red">Bloqueado</span>':'<span class="tag green">Ativo</span>'}</td>
+    <td class="muted" style="white-space:nowrap">${u.ultimoAcesso?fdata(u.ultimoAcesso):'Ainda não entrou'}</td>
+    <td class="num">${u.email===DONO?'':`<button class="btn icon sm" title="Editar" onclick="modalUsuario('${esc(u.email)}')">${ICON.edit}</button>`}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">Nenhum usuário</td></tr>'}
+  </tbody></table></div></div>
+  <div class="card" style="margin-top:14px"><h2>Como dar acesso a alguém</h2>
+    <ol class="muted" style="margin:0;padding-left:18px;line-height:1.9">
+      <li>Clique em <b>Novo usuário</b> e cadastre o nome e o e-mail da pessoa.</li>
+      <li>Envie para ela o link do painel: <b style="word-break:break-all">${esc(APP_URL)}</b></li>
+      <li>Ela clica em <b>Primeiro acesso</b>, recebe um e-mail para criar a senha, entra e cria o PIN de ${PIN_LEN} números.</li>
+      <li>Para tirar o acesso, edite o usuário e marque <b>Bloqueado</b>.</li>
+    </ol></div>`;
+}
+function modalUsuario(email){
+  const u=email?S.usuarios.find(x=>x.email===email):{nome:'',email:'',papel:'membro',ativo:true};
+  openModal(`<h2>${email?'Editar usuário':'Novo usuário'}</h2><div class="fields">
+    <div class="field full"><label>Nome</label><input id="u-n" value="${esc(u.nome||'')}" placeholder="Ex.: Maria Souza"></div>
+    <div class="field full"><label>E-mail</label><input id="u-e" type="email" value="${esc(u.email)}" ${email?'disabled':''} placeholder="email@empresa.com.br"><small>É com este e-mail que a pessoa faz o primeiro acesso.</small></div>
+    <div class="field"><label>Perfil</label><select id="u-p"><option value="membro" ${u.papel!=='admin'?'selected':''}>Membro</option><option value="admin" ${u.papel==='admin'?'selected':''}>Administrador</option></select><small>Administrador também gerencia a equipe.</small></div>
+    <div class="field"><label>Situação</label><select id="u-a"><option value="1" ${u.ativo!==false?'selected':''}>Ativo</option><option value="0" ${u.ativo===false?'selected':''}>Bloqueado</option></select></div>
+  </div><div class="modal-foot">${email?`<button class="btn danger" style="margin-right:auto" onclick="excluirUsuario('${esc(email)}')">${ICON.trash} Remover</button>`:''}<button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" id="u-s">Salvar</button></div>`);
+  $('#u-s').onclick=async()=>{
+    const em=(email||$('#u-e').value).trim().toLowerCase();
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){toast('Informe um e-mail válido');return}
+    if(!email&&S.usuarios.some(x=>x.email===em)){toast('Este e-mail já está cadastrado');return}
+    const dados={nome:$('#u-n').value.trim(),papel:$('#u-p').value,ativo:$('#u-a').value==='1'};
+    if(!email)dados.criadoEm=new Date().toISOString();
+    try{await db.collection('usuarios').doc(em).set(dados,{merge:true});
+      const ex=S.usuarios.find(x=>x.email===em);if(ex)Object.assign(ex,dados);else S.usuarios.push({email:em,...dados});
+      closeModal();render();toast(email?'Usuário atualizado':'Usuário cadastrado — envie o link do painel para a pessoa')}
+    catch(e){toast('Erro ao salvar: '+(e.code||e.message))}
+  };
+}
+function excluirUsuario(email){confirmar(`Remover ${email} da equipe? A pessoa perde o acesso ao painel.`,async()=>{
+  try{await db.collection('usuarios').doc(email).delete();S.usuarios=S.usuarios.filter(x=>x.email!==email);render();toast('Usuário removido')}
+  catch(e){toast('Erro: '+(e.code||e.message))}
+})}
 
 /* ================= Ações ================= */
 function moverDem(id,st){const d=dem(id);d.status=st;save();render();toast('Demanda atualizada')}
@@ -552,7 +741,7 @@ function pararTimer(){
 }
 function salvarTimer(){
   const t=S.timer;
-  S.lancamentos.push({id:uid(),projetoId:t.projetoId,demandaId:t.demandaId,inicio:t.inicio,minutos:Math.max(1,+$('#f-min').value||1),modalidade:$('#f-mod').value,descricao:$('#f-desc').value.trim(),faturado:false});
+  S.lancamentos.push({id:uid(),projetoId:t.projetoId,demandaId:t.demandaId,inicio:t.inicio,minutos:Math.max(1,+$('#f-min').value||1),modalidade:$('#f-mod').value,descricao:$('#f-desc').value.trim(),faturado:false,usuario:EU.nome||EU.email,usuarioEmail:EU.email});
   S.timer=null;save();closeModal();render();toast('Horas lançadas');
 }
 function descartarTimer(){confirmar('Descartar este tempo sem salvar?',()=>{S.timer=null;save();render()})}
@@ -644,7 +833,7 @@ function modalLanc(id,pidPadrao){
   $('#l-save').onclick=()=>{
     const min=(+$('#l-h').value||0)*60+(+$('#l-m').value||0);if(min<=0){toast('Informe a duração');return}
     const dados={projetoId:$('#l-p').value,demandaId:$('#l-d').value,inicio:new Date($('#l-i').value).toISOString(),minutos:min,modalidade:$('#l-mod').value,faturado:$('#l-f').value==='1',descricao:$('#l-desc').value.trim()};
-    if(id)Object.assign(l,dados);else S.lancamentos.push({id:uid(),...dados});
+    if(id)Object.assign(l,dados);else S.lancamentos.push({id:uid(),...dados,usuario:EU.nome||EU.email,usuarioEmail:EU.email});
     save();closeModal();render();toast('Lançamento salvo');
   };
 }
