@@ -246,7 +246,8 @@ function telaCarregando(){document.getElementById('login').classList.remove('hid
 function entrar(){
   const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});
   auth.signInWithPopup(p).catch(e=>{
-    if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment')return auth.signInWithRedirect(p);
+    if(e.code==='auth/popup-blocked'){document.getElementById('login-msg').textContent='O navegador bloqueou a janela de login. Permita pop-ups para este site e tente de novo.';return}
+    if(e.code==='auth/operation-not-supported-in-this-environment')return auth.signInWithRedirect(p);
     if(e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')document.getElementById('login-msg').textContent='Não foi possível entrar: '+(e.code||e.message);
   });
 }
