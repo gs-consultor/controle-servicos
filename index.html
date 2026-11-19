@@ -139,6 +139,10 @@ td.num,th.num{text-align:right;white-space:nowrap}
 .sec-title{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--brand);font-weight:800;margin:22px 0 8px}
 .toolbar{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px}
 .toolbar .field{min-width:180px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:13px;background:#fff}
+.chip input{width:auto!important;margin:0}
+.chip:has(input:checked){background:var(--brand-soft);border-color:var(--brand-2);color:var(--brand)}
 .demo-badge{font-size:11px;background:var(--warn-soft);color:var(--warn);padding:4px 10px;border-radius:99px;font-weight:700}
 /* login + sync */
 .login{position:fixed;inset:0;background:linear-gradient(160deg,#0f3436,#13666a);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
@@ -207,7 +211,8 @@ td.num,th.num{text-align:right;white-space:nowrap}
     <button class="nav-btn" data-view="painel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Painel</button>
     <button class="nav-btn" data-view="projetos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Projetos</button>
     <button class="nav-btn" data-view="horas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>Horas</button>
-    <button class="nav-btn" data-view="cobranca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>Cobrança</button>
+    <button class="nav-btn nav-admin" data-view="cobranca" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>Cobrança</button>
+    <button class="nav-btn nav-admin" data-view="repasses" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.5"/><path d="M6 10v.01M18 15v.01"/></svg>Repasses</button>
     <button class="nav-btn nav-admin" data-view="equipe" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6.1 4.6 1.8 5.3 5.4"/></svg>Equipe</button>
     <div class="aside-foot"><div class="user-line" id="user-line"></div><button class="btn sm" style="margin-bottom:6px" onclick="telaCriarPin(true)">Trocar PIN</button><button class="btn sm" onclick="sair()">Sair</button></div>
   </aside>
@@ -242,28 +247,52 @@ const PIN_LEN=4, PIN_MAX_TENT=5, BLOQUEIO_MIN=5;
 let S=null, synced=null, saving=Promise.resolve(), pendente=false;
 let EU=null, syncedTimer='null';
 const isAdmin=()=>!!EU&&(EU.papel==='admin'||EU.email===DONO);
-function vazio(){return {perfil:{nome:'62.019.887 GUSTAVO SOARES DE OLIVEIRA',doc:'CNPJ 62.019.887/0001-17',email:'',pix:'PIX — chave CNPJ 62.019.887/0001-17'},projetos:[],demandas:[],lancamentos:[],usuarios:[],timer:null}}
+const FIN=['valorCheio','valorHora','franquia','valorExcedente','pacoteMinimo','valorFechado','deslocIda','deslocVolta','descontoTipo','descontoValor','descontoNome'];
+const pubProj=p=>{const o={};for(const k in p)if(!FIN.includes(k))o[k]=p[k];return o};
+const finProj=p=>{const o={};FIN.forEach(k=>{if(p[k]!==undefined)o[k]=p[k]});return o};
+function vazio(){return {perfil:{nome:'62.019.887 GUSTAVO SOARES DE OLIVEIRA',doc:'CNPJ 62.019.887/0001-17',email:'',pix:'PIX — chave CNPJ 62.019.887/0001-17'},projetos:[],demandas:[],lancamentos:[],usuarios:[],equipe:[],repasses:{},timer:null}}
 async function carregar(){
-  const st=vazio(); const sy={projetos:{},demandas:{},lancamentos:{},config:null};
+  const st=vazio(); const sy={projetos:{},demandas:{},lancamentos:{},financeiro:{},config:null,equipe:null};let migrar=false;
   const snaps=await Promise.all(COLS.map(c=>db.collection(c).get()));
-  COLS.forEach((c,i)=>snaps[i].forEach(d=>{const o={id:d.id,...d.data()};st[c].push(o);sy[c][d.id]=JSON.stringify(o)}));
+  COLS.forEach((c,i)=>snaps[i].forEach(d=>{const o={id:d.id,...d.data()};st[c].push(o);sy[c][d.id]=JSON.stringify(o);if(c==='projetos'&&FIN.some(k=>k in o))migrar=true}));
   const cfg=await db.collection('config').doc('geral').get();
   if(cfg.exists){const d=cfg.data();if(d.perfil)st.perfil=d.perfil;sy.config=JSON.stringify({perfil:st.perfil})}
-  if(isAdmin()){const us=await db.collection('usuarios').get();us.forEach(d=>st.usuarios.push({email:d.id,...d.data()}))}
+  const eq=await db.collection('config').doc('equipe').get();
+  st.equipe=eq.exists?(eq.data().lista||[]):[];sy.equipe=JSON.stringify(st.equipe);
+  if(isAdmin()){
+    const [us,fin,rp]=await Promise.all(['usuarios','financeiro','repasses'].map(c=>db.collection(c).get()));
+    us.forEach(d=>st.usuarios.push({email:d.id,...d.data()}));
+    fin.forEach(d=>{sy.financeiro[d.id]=JSON.stringify(d.data());const p=st.projetos.find(x=>x.id===d.id);if(p)Object.assign(p,d.data())});
+    rp.forEach(d=>st.repasses[d.id]=+d.data().valorHora||0);
+  }else{st.projetos.forEach(p=>FIN.forEach(k=>delete p[k]))}
   st.timer=EU.timer||null;syncedTimer=JSON.stringify(st.timer);
   S=st;synced=sy;
+  if(isAdmin()&&(migrar||sy.equipe!==JSON.stringify(equipeLista())))save();
+}
+function equipeLista(){
+  if(!isAdmin())return S?S.equipe:[];
+  const l=S.usuarios.filter(u=>u.ativo!==false).map(u=>({email:u.email,nome:u.nome||u.email}));
+  if(!l.some(u=>u.email===DONO))l.push({email:DONO,nome:'Gustavo Soares'});
+  return l.sort((a,b)=>a.nome.localeCompare(b.nome));
 }
 function setSync(t){const el=document.getElementById('sync');el.style.display='block';el.classList.toggle('err',t==='erro');el.textContent={ok:'✓ Salvo',pendente:'Salvando…',erro:'⚠ Erro ao salvar — verifique a internet'}[t]}
 function save(){pendente=true;setSync('pendente');clearTimeout(save._t);save._t=setTimeout(()=>{saving=saving.then(flush).catch(e=>{console.error(e);setSync('erro');toast('Erro ao salvar: '+(e.code||e.message))})},350)}
 async function flush(){
   if(!S||!EU)return;
-  const ops=[];const novo={};
+  const ops=[];const novo={};const adm=isAdmin();
   for(const c of COLS){novo[c]={};
-    for(const o of S[c]){const j=JSON.stringify(o);novo[c][o.id]=j;
+    if(c==='projetos'&&!adm){novo[c]=synced[c];continue}
+    for(const o of S[c]){const j=JSON.stringify(c==='projetos'?pubProj(o):o);novo[c][o.id]=j;
       if(synced[c][o.id]!==j){const {id,...rest}=JSON.parse(j);const ref=db.collection(c).doc(o.id);ops.push(b=>b.set(ref,rest))}}
     for(const id in synced[c]) if(!(id in novo[c])){const ref=db.collection(c).doc(id);ops.push(b=>b.delete(ref))}}
+  novo.financeiro=synced.financeiro;novo.equipe=synced.equipe;
+  if(adm){novo.financeiro={};
+    for(const p of S.projetos){const j=JSON.stringify(finProj(p));novo.financeiro[p.id]=j;if(synced.financeiro[p.id]!==j){const ref=db.collection('financeiro').doc(p.id);ops.push(b=>b.set(ref,JSON.parse(j)))}}
+    for(const id in synced.financeiro)if(!(id in novo.financeiro)){const ref=db.collection('financeiro').doc(id);ops.push(b=>b.delete(ref))}
+    const ej=JSON.stringify(equipeLista());novo.equipe=ej;if(ej!==synced.equipe){const ref=db.collection('config').doc('equipe');ops.push(b=>b.set(ref,{lista:JSON.parse(ej)}));S.equipe=JSON.parse(ej)}
+  }
   const cj=JSON.stringify({perfil:S.perfil});novo.config=cj;
-  if(cj!==synced.config){const ref=db.collection('config').doc('geral');ops.push(b=>b.set(ref,JSON.parse(cj)))}
+  if(adm&&cj!==synced.config){const ref=db.collection('config').doc('geral');ops.push(b=>b.set(ref,JSON.parse(cj)))}
   const tj=JSON.stringify(S.timer||null);
   if(tj!==syncedTimer){const ref=db.collection('usuarios').doc(EU.email);ops.push(b=>b.set(ref,{timer:JSON.parse(tj)},{merge:true}))}
   for(let i=0;i<ops.length;i+=400){const b=db.batch();ops.slice(i,i+400).forEach(f=>f(b));await b.commit()}
@@ -380,7 +409,7 @@ document.addEventListener('visibilitychange',()=>{
   escondidoEm=0;
 });
 function aplicarNav(){document.querySelectorAll('.nav-admin').forEach(b=>b.style.display=isAdmin()?'':'none');L('user-line').textContent=(EU.nome?EU.nome+' · ':'')+EU.email}
-function resetApp(){S=null;EU=null;pinModo=null;clearInterval(tick);L('timerbar').style.display='none';L('sync').style.display='none';closeModal()}
+function resetApp(){view='painel';ctx={};S=null;EU=null;pinModo=null;clearInterval(tick);L('timerbar').style.display='none';L('sync').style.display='none';closeModal()}
 async function sair(){try{clearTimeout(save._t);if(pendente)await flush()}catch(e){}resetApp();await auth.signOut()}
 
 async function iniciar(u){
@@ -466,79 +495,95 @@ function calcular(p,lancs){
   if(visitas>0) linhas.push({desc:`Deslocamento — ${visitas} visita(s) presencial(is) (ida ${brl(+p.deslocIda)} + volta ${brl(+p.deslocVolta)})`,qtd:visitas,unit:(+p.deslocIda)+(+p.deslocVolta),total:desloc,dsc:0,liquido:desloc,desloc:true});
   return {minutos,horas,visitas,desloc,servicos,descontoParceria,descontoTotal,servicosLiquido,total:servicosLiquido+desloc,linhas};
 }
+const partsDe=l=>(l.participantes&&l.participantes.length)?l.participantes:[l.usuarioEmail||DONO];
+function nomeDe(email){const u=equipeLista().find(x=>x.email===email)||S.usuarios.find(x=>x.email===email);return u?(u.nome||email):email.split('@')[0]}
+const visiveis=ls=>isAdmin()?ls:ls.filter(l=>partsDe(l).includes(EU.email));
+function pickPart(id,sel){let eq=equipeLista();if(!eq.some(u=>u.email===EU.email))eq=[{email:EU.email,nome:EU.nome||EU.email},...eq];
+  return `<div class="chips" id="${id}">${eq.map(u=>`<label class="chip"><input type="checkbox" value="${esc(u.email)}" ${sel.includes(u.email)?'checked':''}><span>${esc(u.nome)}${u.email===EU.email?' (você)':''}</span></label>`).join('')}</div>`}
+function getPart(id){return [...document.querySelectorAll('#'+id+' input:checked')].map(i=>i.value)}
 function descontoTexto(p){const v=+p.descontoValor||0,t=p.descontoTipo||'nenhum';if(t==='nenhum'||!v)return '';return (p.descontoNome||'Desconto')+' — '+(t==='percentual'?(v.toLocaleString('pt-BR')+'%'):t==='hora'?(brl(v)+' por hora'):(brl(v)+' no período'))}
 function lancsDe(pid,mes){return S.lancamentos.filter(l=>l.projetoId===pid&&(!mes||mesKey(l.inicio)===mes)).sort((a,b)=>a.inicio.localeCompare(b.inicio))}
 
 /* ================= Navegação ================= */
 let view='painel', ctx={};
-function go(v,c){view=v;ctx=c||{};render();window.scrollTo(0,0)}
+function go(v,c){if(['cobranca','repasses','equipe'].includes(v)&&!isAdmin())v='painel';view=v;ctx=c||{};render();window.scrollTo(0,0)}
 document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>go(b.dataset.view));
 function render(){
+  if(['cobranca','repasses','equipe'].includes(view)&&!isAdmin()){view='painel';ctx={}}
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===(view==='projeto'?'projetos':view)));
   const m=$('#main');
-  m.innerHTML=({painel:vPainel,projetos:vProjetos,projeto:vProjeto,horas:vHoras,cobranca:vCobranca,equipe:vEquipe})[view]();
+  m.innerHTML=({painel:vPainel,projetos:vProjetos,projeto:vProjeto,horas:vHoras,cobranca:vCobranca,equipe:vEquipe,repasses:vRepasses})[view]();
   renderTimer();
 }
 
 /* ================= Views ================= */
 function vPainel(){
-  const mes=mesAtual();
-  const lm=S.lancamentos.filter(l=>mesKey(l.inicio)===mes);
+  const mes=mesAtual(), adm=isAdmin();
+  const lm=visiveis(S.lancamentos.filter(l=>mesKey(l.inicio)===mes));
   const min=lm.reduce((a,l)=>a+l.minutos,0);
-  let aFaturar=0;
-  S.projetos.filter(p=>p.status==='ativo').forEach(p=>{const ls=lancsDe(p.id,mes).filter(l=>!l.faturado);if(ls.length||p.tipo==='hora'&&p.pacoteMinimo)aFaturar+=calcular(p,ls).total});
   const abertas=S.demandas.filter(d=>d.status!=='concluida').length;
-  const visitas=new Set(lm.filter(l=>l.modalidade==='presencial').map(l=>l.projetoId+fdata(l.inicio))).size;
-  const recentes=[...S.lancamentos].sort((a,b)=>b.inicio.localeCompare(a.inicio)).slice(0,6);
+  const recentes=visiveis([...S.lancamentos]).sort((a,b)=>b.inicio.localeCompare(a.inicio)).slice(0,6);
   const demAbertas=S.demandas.filter(d=>d.status!=='concluida').sort((a,b)=>({alta:0,media:1,baixa:2}[a.prioridade]-{alta:0,media:1,baixa:2}[b.prioridade])).slice(0,6);
-  return `
-  <div class="top"><div><h1>Painel</h1><div class="sub">${esc(mesNome(mes))} · visão geral dos seus serviços</div></div>
-    <div class="row wrap"><button class="btn" onclick="telaCriarPin(true)">Trocar PIN</button><button class="btn" onclick="sair()">Sair</button><button class="btn primary" onclick="modalTimer()">${ICON.play} Iniciar cronômetro</button></div></div>
-  <div class="grid kpis">
-    <div class="card kpi"><div class="label">Horas no mês</div><div class="value">${hm(min)}</div><div class="hint">${lm.length} lançamentos</div></div>
+  let kpis;
+  if(adm){
+    let aFaturar=0;
+    S.projetos.filter(p=>p.status==='ativo').forEach(p=>{const ls=lancsDe(p.id,mes).filter(l=>!l.faturado);if(ls.length||p.tipo==='hora'&&p.pacoteMinimo)aFaturar+=calcular(p,ls).total});
+    const rep=repassesMes(mes);
+    kpis=`<div class="card kpi"><div class="label">Horas no mês</div><div class="value">${hm(min)}</div><div class="hint">${lm.length} lançamentos</div></div>
     <div class="card kpi"><div class="label">A faturar (mês)</div><div class="value">${brl(aFaturar)}</div><div class="hint">projetos ativos, não faturado</div></div>
-    <div class="card kpi"><div class="label">Demandas abertas</div><div class="value">${abertas}</div><div class="hint">a fazer + em andamento</div></div>
-    <div class="card kpi"><div class="label">Visitas presenciais</div><div class="value">${visitas}</div><div class="hint">no mês</div></div>
-  </div>
+    <div class="card kpi"><div class="label">Repasses da equipe</div><div class="value">${brl(rep.total)}</div><div class="hint">a pagar no mês</div></div>
+    <div class="card kpi"><div class="label">Demandas abertas</div><div class="value">${abertas}</div><div class="hint">a fazer + em andamento</div></div>`;
+  }else{
+    const solo=lm.filter(l=>partsDe(l).length===1).reduce((a,l)=>a+l.minutos,0);
+    kpis=`<div class="card kpi"><div class="label">Minhas horas no mês</div><div class="value">${hm(min)}</div><div class="hint">${lm.length} lançamentos</div></div>
+    <div class="card kpi"><div class="label">Sozinho</div><div class="value">${hm(solo)}</div><div class="hint">horas solo</div></div>
+    <div class="card kpi"><div class="label">Com a equipe</div><div class="value">${hm(min-solo)}</div><div class="hint">horas em conjunto</div></div>
+    <div class="card kpi"><div class="label">Demandas abertas</div><div class="value">${abertas}</div><div class="hint">a fazer + em andamento</div></div>`;
+  }
+  return `
+  <div class="top"><div><h1>Painel</h1><div class="sub">${esc(mesNome(mes))} · ${adm?'visão geral dos seus serviços':'suas horas e demandas'}</div></div>
+    <div class="row wrap"><button class="btn" onclick="telaCriarPin(true)">Trocar PIN</button><button class="btn" onclick="sair()">Sair</button><button class="btn primary" onclick="modalTimer()">${ICON.play} Iniciar cronômetro</button></div></div>
+  <div class="grid kpis">${kpis}</div>
   <div class="grid two" style="margin-top:14px">
     <div class="card"><div class="row between"><h2>Projetos ativos</h2><button class="btn sm" onclick="go('projetos')">Ver todos</button></div>
       <div class="list">${S.projetos.filter(p=>p.status==='ativo').map(p=>{
-        const c=calcular(p,lancsDe(p.id,mes));const fr=+p.franquia;
-        const pct=p.tipo==='hora'&&fr?Math.min(100,c.horas/fr*100):0;
-        return `<div class="item" style="cursor:pointer" onclick="go('projeto',{id:'${p.id}'})"><span class="dot" style="background:${p.cor}"></span>
-          <div class="grow"><div class="title">${esc(p.nome)}</div><div class="meta">${esc(p.cliente)} · ${hm(c.minutos)} no mês${p.tipo==='hora'&&fr?` de ${fr}h do pacote`:''}</div>
-          ${p.tipo==='hora'&&fr?`<div class="progress ${c.horas>fr?'over':''}"><span style="width:${pct}%"></span></div>`:''}</div>
-          <div class="mono" style="font-weight:700">${brl(c.total)}</div></div>`}).join('')||'<div class="empty">Nenhum projeto ativo</div>'}</div></div>
+        const lp=visiveis(lancsDe(p.id,mes));const mins=lp.reduce((a,l)=>a+l.minutos,0);
+        let extra='',dir='';
+        if(adm){const c=calcular(p,lancsDe(p.id,mes));const fr=+p.franquia;const pct=p.tipo==='hora'&&fr?Math.min(100,c.horas/fr*100):0;
+          extra=p.tipo==='hora'&&fr?`<div class="progress ${c.horas>fr?'over':''}"><span style="width:${pct}%"></span></div>`:'';dir=`<div class="mono" style="font-weight:700">${brl(c.total)}</div>`;
+          return `<div class="item" style="cursor:pointer" onclick="go('projeto',{id:'${p.id}'})"><span class="dot" style="background:${p.cor}"></span><div class="grow"><div class="title">${esc(p.nome)}</div><div class="meta">${esc(p.cliente)} · ${hm(c.minutos)} no mês${p.tipo==='hora'&&fr?` de ${fr}h do pacote`:''}</div>${extra}</div>${dir}</div>`}
+        return `<div class="item" style="cursor:pointer" onclick="go('projeto',{id:'${p.id}'})"><span class="dot" style="background:${p.cor}"></span><div class="grow"><div class="title">${esc(p.nome)}</div><div class="meta">${esc(p.cliente)}</div></div><div class="mono" style="font-weight:700">${hm(mins)}</div></div>`}).join('')||'<div class="empty">Nenhum projeto ativo</div>'}</div></div>
     <div class="card"><h2>Demandas prioritárias</h2><div class="list">${demAbertas.map(d=>`
       <div class="item"><div class="grow"><div class="title">${esc(d.titulo)}</div><div class="meta">${esc(proj(d.projetoId)?.nome||'')}</div></div>
       <span class="tag ${PRIOR[d.prioridade][1]}">${PRIOR[d.prioridade][0]}</span>
       <button class="btn icon sm" title="Cronometrar" onclick="iniciarTimer('${d.projetoId}','${d.id}')">${ICON.play}</button></div>`).join('')||'<div class="empty">Tudo em dia 🎉</div>'}</div></div>
   </div>
-  <div class="card" style="margin-top:14px"><div class="row between"><h2>Últimos lançamentos de horas</h2><button class="btn sm" onclick="go('horas')">Ver todos</button></div>
+  <div class="card" style="margin-top:14px"><div class="row between"><h2>${adm?'Últimos lançamentos de horas':'Meus últimos lançamentos'}</h2><button class="btn sm" onclick="go('horas')">Ver todos</button></div>
     ${tabelaLanc(recentes,true)}</div>`;
 }
 
 function vProjetos(){
   const mes=mesAtual();
-  return `<div class="top"><div><h1>Projetos</h1><div class="sub">Cada projeto tem seu modelo de cobrança, demandas e horas</div></div>
-    <button class="btn primary" onclick="modalProjeto()">${ICON.plus} Novo projeto</button></div>
+  const adm=isAdmin();
+  return `<div class="top"><div><h1>Projetos</h1><div class="sub">${adm?'Cada projeto tem seu modelo de cobrança, demandas e horas':'Projetos em que a equipe trabalha'}</div></div>
+    ${adm?`<button class="btn primary" onclick="modalProjeto()">${ICON.plus} Novo projeto</button>`:''}</div>
   <div class="grid projects">${S.projetos.map(p=>{
     const c=calcular(p,lancsDe(p.id,mes));const ds=S.demandas.filter(d=>d.projetoId===p.id);
     const fr=+p.franquia;const pct=p.tipo==='hora'&&fr?Math.min(100,c.horas/fr*100):0;
     return `<div class="card pcard" onclick="go('projeto',{id:'${p.id}'})"><div class="bar" style="background:${p.cor}"></div>
-      <div class="row between"><span class="tag ${p.tipo==='hora'?'teal':'blue'}">${p.tipo==='hora'?'Por hora':'Valor fechado'}</span>
+      <div class="row between">${adm?`<span class="tag ${p.tipo==='hora'?'teal':'blue'}">${p.tipo==='hora'?'Por hora':'Valor fechado'}</span>`:'<span></span>'}
       <span class="tag ${p.status==='ativo'?'green':''}">${p.status==='ativo'?'Ativo':p.status==='pausado'?'Pausado':'Encerrado'}</span></div>
       <h3 style="margin-top:10px;font-size:15px">${esc(p.nome)}</h3><div class="sub">${esc(p.cliente)}</div>
-      ${p.tipo==='hora'&&fr?`<div class="progress ${c.horas>fr?'over':''}"><span style="width:${pct}%"></span></div><div class="meta muted" style="font-size:12px;margin-top:4px">${hm(c.minutos)} de ${fr}h do pacote este mês</div>`:''}
-      <div class="stats"><div><b>${p.tipo==='hora'?brl(+p.valorHora)+'/h':brl(+p.valorFechado)}</b>${p.tipo==='hora'?'valor hora':'valor do projeto'}</div>
-      <div><b>${ds.filter(d=>d.status!=='concluida').length}/${ds.length}</b>demandas abertas</div><div><b>${brl(c.total)}</b>no mês</div></div></div>`}).join('')||'<div class="card empty">Crie seu primeiro projeto</div>'}</div>`;
+      ${adm&&p.tipo==='hora'&&fr?`<div class="progress ${c.horas>fr?'over':''}"><span style="width:${pct}%"></span></div><div class="meta muted" style="font-size:12px;margin-top:4px">${hm(c.minutos)} de ${fr}h do pacote este mês</div>`:''}
+      <div class="stats">${adm?`<div><b>${p.tipo==='hora'?brl(+p.valorHora)+'/h':brl(+p.valorFechado)}</b>${p.tipo==='hora'?'valor hora':'valor do projeto'}</div>`:''}
+      <div><b>${ds.filter(d=>d.status!=='concluida').length}/${ds.length}</b>demandas abertas</div>${adm?`<div><b>${brl(c.total)}</b>no mês</div>`:`<div><b>${hm(visiveis(lancsDe(p.id,mes)).reduce((a,l)=>a+l.minutos,0))}</b>minhas horas no mês</div>`}</div></div>`}).join('')||'<div class="card empty">Crie seu primeiro projeto</div>'}</div>`;
 }
 
 function vProjeto(){
   const p=proj(ctx.id); if(!p){view='projetos';return vProjetos()}
-  const tab=ctx.tab||'demandas'; const mes=mesAtual();
+  const adm=isAdmin(); const tab=(!adm&&ctx.tab==='condicoes')?'demandas':(ctx.tab||'demandas'); const mes=mesAtual();
   const c=calcular(p,lancsDe(p.id,mes)); const ds=S.demandas.filter(d=>d.projetoId===p.id);
-  const total=lancsDe(p.id).reduce((a,l)=>a+l.minutos,0);
+  const total=visiveis(lancsDe(p.id)).reduce((a,l)=>a+l.minutos,0);
   let body='';
   if(tab==='demandas'){
     body=`<div class="row between" style="margin-bottom:12px"><div class="muted">${ds.length} demanda(s)</div><button class="btn primary sm" onclick="modalDemanda('${p.id}')">${ICON.plus} Nova demanda</button></div>
@@ -556,8 +601,8 @@ function vProjeto(){
           <button class="btn sm icon" title="Editar" onclick="modalDemanda('${p.id}','${d.id}')">${ICON.edit}</button>
         </div></div>`}).join('')||'<div class="muted" style="font-size:12.5px;padding:6px">Nada aqui</div>'}</div>`}).join('')}</div>`;
   }else if(tab==='horas'){
-    const ls=lancsDe(p.id).reverse();
-    body=`<div class="row between" style="margin-bottom:12px"><div class="muted">Total geral: <b>${hm(total)}</b></div>
+    const ls=visiveis(lancsDe(p.id)).reverse();
+    body=`<div class="row between" style="margin-bottom:12px"><div class="muted">${adm?'Total geral':'Minhas horas no projeto'}: <b>${hm(total)}</b></div>
       <div class="row"><button class="btn sm" onclick="modalLanc(null,'${p.id}')">${ICON.plus} Lançar manual</button><button class="btn primary sm" onclick="iniciarTimer('${p.id}','')">${ICON.play} Cronometrar</button></div></div>
       <div class="card" style="padding:6px 12px">${tabelaLanc(ls,false)}</div>`;
   }else{
@@ -574,15 +619,15 @@ function vProjeto(){
       <div class="row" style="margin-top:18px"><button class="btn" onclick="modalProjeto('${p.id}')">${ICON.edit} Editar condições</button><button class="btn primary" onclick="go('cobranca',{pid:'${p.id}'})">Gerar cobrança</button></div></div>`;
   }
   return `<div class="top"><div class="row"><button class="btn icon" onclick="go('projetos')">${ICON.back}</button>
-    <div><h1 style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:${p.cor};width:12px;height:12px"></span>${esc(p.nome)}</h1><div class="sub">${esc(p.cliente)} · ${p.tipo==='hora'?'Cobrança por hora':'Valor fechado'}</div></div></div>
-    <div class="row"><button class="btn" onclick="modalProjeto('${p.id}')">${ICON.edit} Editar</button><button class="btn primary" onclick="go('cobranca',{pid:'${p.id}'})">Gerar cobrança</button></div></div>
-  <div class="grid kpis">
+    <div><h1 style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:${p.cor};width:12px;height:12px"></span>${esc(p.nome)}</h1><div class="sub">${esc(p.cliente)}${adm?' · '+(p.tipo==='hora'?'Cobrança por hora':'Valor fechado'):''}</div></div></div>
+    ${adm?`<div class="row"><button class="btn" onclick="modalProjeto('${p.id}')">${ICON.edit} Editar</button><button class="btn primary" onclick="go('cobranca',{pid:'${p.id}'})">Gerar cobrança</button></div>`:''}</div>
+  ${adm?`<div class="grid kpis">
     <div class="card kpi"><div class="label">Horas no mês</div><div class="value">${hm(c.minutos)}</div><div class="hint">${p.tipo==='hora'&&+p.franquia?`pacote: ${p.franquia}h`:'informativo'}</div></div>
     <div class="card kpi"><div class="label">Valor do mês</div><div class="value">${brl(c.total)}</div><div class="hint">serviços + deslocamento</div></div>
     <div class="card kpi"><div class="label">Visitas no mês</div><div class="value">${c.visitas}</div><div class="hint">${brl(c.desloc)} de deslocamento</div></div>
     <div class="card kpi"><div class="label">Demandas</div><div class="value">${ds.filter(d=>d.status!=='concluida').length}<span class="muted" style="font-size:15px">/${ds.length}</span></div><div class="hint">abertas / total</div></div>
-  </div>
-  <div class="tabs">${[['demandas','Demandas'],['horas','Horas'],['condicoes','Condições de cobrança']].map(([k,l])=>`<button class="tab ${tab===k?'active':''}" onclick="go('projeto',{id:'${p.id}',tab:'${k}'})">${l}</button>`).join('')}</div>
+  </div>`:`<div class="grid kpis"><div class="card kpi"><div class="label">Minhas horas no mês</div><div class="value">${hm(visiveis(lancsDe(p.id,mes)).reduce((a,l)=>a+l.minutos,0))}</div></div><div class="card kpi"><div class="label">Demandas</div><div class="value">${ds.filter(d=>d.status!=='concluida').length}<span class="muted" style="font-size:15px">/${ds.length}</span></div><div class="hint">abertas / total</div></div></div>`}
+  <div class="tabs">${[['demandas','Demandas'],['horas','Horas'],...(adm?[['condicoes','Condições de cobrança']]:[])].map(([k,l])=>`<button class="tab ${tab===k?'active':''}" onclick="go('projeto',{id:'${p.id}',tab:'${k}'})">${l}</button>`).join('')}</div>
   ${body}`;
 }
 
@@ -592,25 +637,29 @@ function tabelaLanc(ls,mostrarProj){
   ${ls.map(l=>{const p=proj(l.projetoId),d=dem(l.demandaId);return `<tr>
     <td style="white-space:nowrap">${fdata(l.inicio)}<div class="muted" style="font-size:12px">${fhora(l.inicio)}</div></td>
     ${mostrarProj?`<td><span class="dot" style="display:inline-block;background:${p?.cor||'#999'};margin-right:6px"></span>${esc(p?.nome||'—')}</td>`:''}
-    <td><b>${esc(d?.titulo||'Geral')}</b><div class="muted" style="font-size:12.5px">${esc(l.descricao||'')}</div>${l.usuario?`<div class="muted" style="font-size:11.5px">por ${esc(l.usuario)}</div>`:''}</td>
-    <td><span class="tag ${l.modalidade==='presencial'?'amber':'blue'}">${l.modalidade==='presencial'?'Presencial':'Remoto'}</span>${l.faturado?' <span class="tag green">Faturado</span>':''}</td>
+    <td><b>${esc(d?.titulo||'Geral')}</b><div class="muted" style="font-size:12.5px">${esc(l.descricao||'')}</div><div class="muted" style="font-size:11.5px">${partsDe(l).length>1?'👥 ':'👤 '}${partsDe(l).map(nomeDe).map(esc).join(', ')}</div></td>
+    <td><span class="tag ${l.modalidade==='presencial'?'amber':'blue'}">${l.modalidade==='presencial'?'Presencial':'Remoto'}</span>${l.faturado&&isAdmin()?' <span class="tag green">Faturado</span>':''}</td>
     <td class="num mono" style="font-weight:700">${hm(l.minutos)}</td>
     <td class="num"><button class="btn icon sm" onclick="modalLanc('${l.id}')">${ICON.edit}</button></td></tr>`}).join('')}</tbody></table></div>`;
 }
 
 function vHoras(){
-  const f=ctx.f||{pid:'',mes:mesAtual()};
-  let ls=S.lancamentos.filter(l=>(!f.pid||l.projetoId===f.pid)&&(!f.mes||mesKey(l.inicio)===f.mes)).sort((a,b)=>b.inicio.localeCompare(a.inicio));
-  const tot=ls.reduce((a,l)=>a+l.minutos,0);
-  return `<div class="top"><div><h1>Horas</h1><div class="sub">Todos os lançamentos, cronometrados ou manuais</div></div>
+  const adm=isAdmin();
+  const f=ctx.f||{pid:'',mes:mesAtual(),pessoa:''};
+  let ls=visiveis(S.lancamentos).filter(l=>(!f.pid||l.projetoId===f.pid)&&(!f.mes||mesKey(l.inicio)===f.mes)&&(!f.pessoa||partsDe(l).includes(f.pessoa))).sort((a,b)=>b.inicio.localeCompare(a.inicio));
+  const tot=ls.reduce((a,l)=>a+l.minutos,0), solo=ls.filter(l=>partsDe(l).length===1).reduce((a,l)=>a+l.minutos,0);
+  const nf=k=>`{f:{...(ctx.f||{mes:mesAtual(),pid:'',pessoa:''}),${k}:this.value}}`;
+  return `<div class="top"><div><h1>${adm?'Horas':'Minhas horas'}</h1><div class="sub">${adm?'Todos os lançamentos, cronometrados ou manuais':'Lançamentos em que você participou, sozinho ou com a equipe'}</div></div>
     <div class="row"><button class="btn" onclick="modalLanc()">${ICON.plus} Lançar manual</button><button class="btn primary" onclick="modalTimer()">${ICON.play} Cronometrar</button></div></div>
   <div class="toolbar">
-    <div class="field"><label>Projeto</label><select onchange="go('horas',{f:{...(ctx.f||{mes:mesAtual()}),pid:this.value}})"><option value="">Todos</option>${S.projetos.map(p=>`<option value="${p.id}" ${f.pid===p.id?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></div>
-    <div class="field"><label>Mês</label><select onchange="go('horas',{f:{...(ctx.f||{pid:''}),mes:this.value}})">${opcoesMes(f.mes,true)}</select></div>
-    <div class="card" style="padding:10px 16px"><span class="muted">Total filtrado:</span> <b class="mono">${hm(tot)}</b> <span class="muted">(${hdec(tot)}h)</span></div>
+    <div class="field"><label>Projeto</label><select onchange="go('horas',${nf('pid')})"><option value="">Todos</option>${S.projetos.map(p=>`<option value="${p.id}" ${f.pid===p.id?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></div>
+    <div class="field"><label>Mês</label><select onchange="go('horas',${nf('mes')})">${opcoesMes(f.mes,true)}</select></div>
+    ${adm?`<div class="field"><label>Pessoa</label><select onchange="go('horas',${nf('pessoa')})"><option value="">Todas</option>${equipeLista().map(u=>`<option value="${esc(u.email)}" ${f.pessoa===u.email?'selected':''}>${esc(u.nome)}</option>`).join('')}</select></div>`:''}
+    <div class="card" style="padding:10px 16px"><span class="muted">Total:</span> <b class="mono">${hm(tot)}</b> <span class="muted">· sozinho ${hm(solo)} · em equipe ${hm(tot-solo)}</span></div>
   </div>
   <div class="card" style="padding:6px 12px">${tabelaLanc(ls,true)}</div>`;
 }
+
 function opcoesMes(sel,todos){
   const set=new Set(S.lancamentos.map(l=>mesKey(l.inicio)));set.add(mesAtual());
   return (todos?`<option value="" ${!sel?'selected':''}>Todos</option>`:'')+[...set].sort().reverse().map(k=>`<option value="${k}" ${k===sel?'selected':''}>${mesNome(k)}</option>`).join('');
@@ -666,6 +715,46 @@ function vCobranca(){
   </div>`;
 }
 
+/* ================= Repasses (admin) ================= */
+function repassesMes(mes){
+  const ls=S.lancamentos.filter(l=>mesKey(l.inicio)===mes);const P={};
+  equipeLista().forEach(u=>P[u.email]={email:u.email,nome:u.nome,min:0,solo:0,proj:{}});
+  ls.forEach(l=>{const ps=partsDe(l);ps.forEach(e=>{const r=P[e]||(P[e]={email:e,nome:nomeDe(e),min:0,solo:0,proj:{}});r.min+=l.minutos;if(ps.length===1)r.solo+=l.minutos;r.proj[l.projetoId]=(r.proj[l.projetoId]||0)+l.minutos})});
+  const pessoas=Object.values(P).map(r=>({...r,taxa:+S.repasses[r.email]||0,valor:Math.round(r.min/60*(+S.repasses[r.email]||0)*100)/100})).sort((a,b)=>b.min-a.min||a.nome.localeCompare(b.nome));
+  return {pessoas,total:pessoas.reduce((a,r)=>a+r.valor,0)};
+}
+function vRepasses(){
+  if(!isAdmin())return '<div class="card empty">Acesso restrito ao administrador.</div>';
+  const mes=ctx.mes||mesAtual();const R=repassesMes(mes);
+  let fat=0;S.projetos.forEach(p=>{const ls=lancsDe(p.id,mes);if(ls.length||(p.status==='ativo'&&p.tipo==='hora'&&p.pacoteMinimo))fat+=calcular(p,ls).total});
+  const sem=R.pessoas.filter(r=>r.min>0&&!r.taxa);
+  return `<div class="top"><div><h1>Repasses</h1><div class="sub">Quanto pagar a cada pessoa pelas horas trabalhadas, incluindo você</div></div></div>
+  <div class="toolbar"><div class="field"><label>Competência</label><select onchange="go('repasses',{mes:this.value})">${opcoesMes(mes,false)}</select></div></div>
+  <div class="grid kpis" style="grid-template-columns:repeat(3,1fr)">
+    <div class="card kpi"><div class="label">Faturamento do mês</div><div class="value">${brl(fat)}</div><div class="hint">total líquido dos projetos</div></div>
+    <div class="card kpi"><div class="label">Total de repasses</div><div class="value">${brl(R.total)}</div><div class="hint">horas × valor/hora de cada um</div></div>
+    <div class="card kpi"><div class="label">Sobra</div><div class="value" style="color:${fat-R.total>=0?'var(--ok)':'var(--danger)'}">${brl(fat-R.total)}</div><div class="hint">faturamento − repasses</div></div>
+  </div>
+  ${sem.length?`<div class="card" style="margin-top:14px;background:var(--warn-soft);border-color:#fcd34d;color:var(--warn)"><b>Falta o valor/hora de:</b> ${sem.map(r=>esc(r.nome)).join(', ')}. Clique no lápis para definir.</div>`:''}
+  <div class="card" style="margin-top:14px;padding:6px 12px"><div class="table-wrap"><table><thead><tr><th>Pessoa</th><th class="num">Horas</th><th class="num">Sozinho</th><th class="num">Em equipe</th><th class="num">Valor/hora</th><th class="num">A pagar</th><th></th></tr></thead><tbody>
+  ${R.pessoas.map(r=>`<tr><td><b>${esc(r.nome)}</b>${r.email===EU.email?' <span class="tag teal">você</span>':''}
+      <div class="muted" style="font-size:12px">${Object.entries(r.proj).map(([pid,m])=>`${esc(proj(pid)?.nome||'Projeto removido')}: ${hm(m)}`).join(' · ')||'Sem horas no mês'}</div></td>
+    <td class="num mono"><b>${hm(r.min)}</b></td><td class="num mono">${hm(r.solo)}</td><td class="num mono">${hm(r.min-r.solo)}</td>
+    <td class="num">${r.taxa?brl(r.taxa):'<span class="muted">—</span>'}</td><td class="num"><b>${brl(r.valor)}</b></td>
+    <td class="num"><button class="btn icon sm" title="Valor/hora" onclick="modalTaxa('${esc(r.email)}')">${ICON.edit}</button></td></tr>`).join('')}
+  <tr><td colspan="5" style="text-align:right"><b>Total</b></td><td class="num"><b>${brl(R.total)}</b></td><td></td></tr>
+  </tbody></table></div></div>
+  <p class="muted" style="font-size:12.5px;margin-top:10px">Quando duas ou mais pessoas trabalham juntas no mesmo lançamento, cada uma recebe pelas horas dela. O cliente continua sendo cobrado pelo tempo do lançamento uma única vez.</p>`;
+}
+function modalTaxa(email){
+  openModal(`<h2>Valor/hora de repasse</h2><p class="muted" style="margin-top:-6px">${esc(nomeDe(email))} · ${esc(email)}</p><div class="fields">
+    <div class="field full"><label>Quanto você paga por hora trabalhada (R$)</label><input id="tx-v" type="number" step="0.01" min="0" value="${S.repasses[email]||''}" placeholder="Ex.: 60,00"><small>Só administradores veem este valor.</small></div></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" id="tx-s">Salvar</button></div>`);
+  $('#tx-s').onclick=async()=>{const v=+$('#tx-v').value||0;
+    try{await db.collection('repasses').doc(email).set({valorHora:v,atualizadoEm:new Date().toISOString()});S.repasses[email]=v;closeModal();render();toast('Valor/hora salvo')}
+    catch(e){toast('Erro ao salvar: '+(e.code||e.message))}};
+}
+
 /* ================= Equipe (admin) ================= */
 function vEquipe(){
   if(!isAdmin())return '<div class="card empty">Acesso restrito ao administrador.</div>';
@@ -704,12 +793,12 @@ function modalUsuario(email){
       if(email&&em!==email){const ant=S.usuarios.find(x=>x.email===email)||{};await db.collection('usuarios').doc(em).set({criadoEm:ant.criadoEm||new Date().toISOString(),...dados});await db.collection('usuarios').doc(email).delete();S.usuarios=S.usuarios.filter(x=>x.email!==email);S.usuarios.push({email:em,criadoEm:ant.criadoEm,...dados})}
       else{if(!email)dados.criadoEm=new Date().toISOString();await db.collection('usuarios').doc(em).set(dados,{merge:true});
       const ex=S.usuarios.find(x=>x.email===em);if(ex)Object.assign(ex,dados);else S.usuarios.push({email:em,...dados})}
-      closeModal();render();toast(email?'Usuário atualizado':'Usuário cadastrado — envie o link do painel para a pessoa')}
+      save();closeModal();render();toast(email?'Usuário atualizado':'Usuário cadastrado — envie o link do painel para a pessoa')}
     catch(e){toast('Erro ao salvar: '+(e.code||e.message))}
   };
 }
 function excluirUsuario(email){confirmar(`Remover ${email} da equipe? A pessoa perde o acesso ao painel.`,async()=>{
-  try{await db.collection('usuarios').doc(email).delete();S.usuarios=S.usuarios.filter(x=>x.email!==email);render();toast('Usuário removido')}
+  try{await db.collection('usuarios').doc(email).delete();S.usuarios=S.usuarios.filter(x=>x.email!==email);save();render();toast('Usuário removido')}
   catch(e){toast('Erro: '+(e.code||e.message))}
 })}
 
@@ -725,9 +814,9 @@ async function copiarCobranca(){try{await navigator.clipboard.writeText(textoCob
 function imprimir(){window.print()}
 
 /* ================= Cronômetro ================= */
-function iniciarTimer(pid,did,mod,desc){
+function iniciarTimer(pid,did,mod,desc,parts){
   if(S.timer){toast('Já existe um cronômetro rodando');return}
-  S.timer={projetoId:pid,demandaId:did||'',inicio:new Date().toISOString(),modalidade:mod||'remoto',descricao:desc||''};
+  S.timer={projetoId:pid,demandaId:did||'',inicio:new Date().toISOString(),modalidade:mod||'remoto',descricao:desc||'',participantes:(parts&&parts.length)?parts:[EU.email]};
   const d=dem(did); if(d&&d.status==='aberta')d.status='andamento';
   save();render();toast('Cronômetro iniciado');
 }
@@ -737,7 +826,7 @@ function renderTimer(){
   const t=S.timer,p=proj(t.projetoId),d=dem(t.demandaId);
   el.style.display='flex';
   el.innerHTML=`<span class="pulse"></span><div class="clock" id="clock">00:00:00</div>
-   <div class="info"><b>${esc(d?.titulo||'Atividade geral')}</b>${esc(p?.nome||'')} · <a href="#" style="color:#9fd6d3" onclick="event.preventDefault();toggleMod()">${t.modalidade==='presencial'?'Presencial':'Remoto'}</a></div>
+   <div class="info"><b>${esc(d?.titulo||'Atividade geral')}</b>${esc(p?.nome||'')}${(t.participantes||[]).length>1?' · 👥 '+t.participantes.length:''} · <a href="#" style="color:#9fd6d3" onclick="event.preventDefault();toggleMod()">${t.modalidade==='presencial'?'Presencial':'Remoto'}</a></div>
    <button class="btn sm stop" onclick="pararTimer()">■ Parar</button>`;
   const up=()=>{const s=Math.floor((Date.now()-new Date(t.inicio))/1000);const c=$('#clock');if(c)c.textContent=[s/3600,s%3600/60,s%60].map(v=>String(Math.floor(v)).padStart(2,'0')).join(':')};
   up();tick=setInterval(up,1000);
@@ -750,12 +839,13 @@ function pararTimer(){
     <div class="field"><label>Tempo registrado (minutos)</label><input id="f-min" type="number" min="1" value="${min}"><small>${hm(min)} — ajuste se precisar</small></div>
     <div class="field"><label>Local</label><select id="f-mod"><option value="remoto" ${t.modalidade==='remoto'?'selected':''}>Remoto</option><option value="presencial" ${t.modalidade==='presencial'?'selected':''}>Presencial (gera deslocamento)</option></select></div>
     <div class="field full"><label>O que foi feito</label><textarea id="f-desc" rows="3" placeholder="Ex.: ajustes na tela de aprovação">${esc(t.descricao)}</textarea></div>
+    <div class="field full"><label>Quem participou</label>${pickPart('f-parts',t.participantes||[EU.email])}</div>
    </div>
    <div class="modal-foot"><button class="btn danger" onclick="descartarTimer()">Descartar</button><button class="btn" onclick="closeModal()">Continuar contando</button><button class="btn primary" onclick="salvarTimer()">Salvar horas</button></div>`);
 }
 function salvarTimer(){
-  const t=S.timer;
-  S.lancamentos.push({id:uid(),projetoId:t.projetoId,demandaId:t.demandaId,inicio:t.inicio,minutos:Math.max(1,+$('#f-min').value||1),modalidade:$('#f-mod').value,descricao:$('#f-desc').value.trim(),faturado:false,usuario:EU.nome||EU.email,usuarioEmail:EU.email});
+  const t=S.timer;const parts=getPart('f-parts');if(!parts.length){toast('Marque quem participou');return}
+  S.lancamentos.push({id:uid(),projetoId:t.projetoId,demandaId:t.demandaId,inicio:t.inicio,minutos:Math.max(1,+$('#f-min').value||1),modalidade:$('#f-mod').value,descricao:$('#f-desc').value.trim(),faturado:false,usuario:EU.nome||EU.email,usuarioEmail:EU.email,participantes:parts});
   S.timer=null;save();closeModal();render();toast('Horas lançadas');
 }
 function descartarTimer(){confirmar('Descartar este tempo sem salvar?',()=>{S.timer=null;save();render()})}
@@ -766,8 +856,9 @@ function modalTimer(){
     <div class="field full"><label>Projeto</label><select id="t-p" onchange="fillDem('t-d',this.value)">${S.projetos.filter(p=>p.status!=='encerrado').map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('')}</select></div>
     <div class="field full"><label>Demanda</label><select id="t-d"></select></div>
     <div class="field"><label>Local</label><select id="t-m"><option value="remoto">Remoto</option><option value="presencial">Presencial</option></select></div>
-    <div class="field"><label>Descrição (opcional)</label><input id="t-desc"></div></div>
-    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" onclick="const p=$('#t-p').value,d=$('#t-d').value,m=$('#t-m').value,ds=$('#t-desc').value;closeModal();iniciarTimer(p,d,m,ds)">${ICON.play} Iniciar</button></div>`);
+    <div class="field"><label>Descrição (opcional)</label><input id="t-desc"></div>
+    <div class="field full"><label>Quem está na operação</label>${pickPart('t-parts',[EU.email])}<small>Marque todos que vão trabalhar juntos neste tempo.</small></div></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" onclick="const p=$('#t-p').value,d=$('#t-d').value,m=$('#t-m').value,ds=$('#t-desc').value,pt=getPart('t-parts');if(!pt.length){toast('Marque quem está na operação');return}closeModal();iniciarTimer(p,d,m,ds,pt)">${ICON.play} Iniciar</button></div>`);
   fillDem('t-d',$('#t-p').value);
 }
 function fillDem(selId,pid,sel){
@@ -846,13 +937,15 @@ function modalLanc(id,pidPadrao){
    <div class="field"><label>Data e hora de início</label><input id="l-i" type="datetime-local" value="${loc}"></div>
    <div class="field"><label>Duração</label><div class="row"><input id="l-h" type="number" min="0" value="${Math.floor(l.minutos/60)}" style="width:70px"> h <input id="l-m" type="number" min="0" max="59" value="${l.minutos%60}" style="width:70px"> min</div></div>
    <div class="field"><label>Local</label><select id="l-mod"><option value="remoto" ${l.modalidade==='remoto'?'selected':''}>Remoto</option><option value="presencial" ${l.modalidade==='presencial'?'selected':''}>Presencial</option></select></div>
-   <div class="field"><label>Faturado</label><select id="l-f"><option value="0">Não</option><option value="1" ${l.faturado?'selected':''}>Sim</option></select></div>
+   ${isAdmin()?`<div class="field"><label>Faturado</label><select id="l-f"><option value="0">Não</option><option value="1" ${l.faturado?'selected':''}>Sim</option></select></div>`:''}
    <div class="field full"><label>Descrição</label><textarea id="l-desc" rows="2">${esc(l.descricao)}</textarea></div>
+   <div class="field full"><label>Quem participou</label>${pickPart('l-parts',id?partsDe(l):[EU.email])}</div>
   </div><div class="modal-foot">${id?`<button class="btn danger" style="margin-right:auto" onclick="excluirLanc('${id}')">${ICON.trash} Excluir</button>`:''}<button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" id="l-save">Salvar</button></div>`);
   fillDem('l-d',l.projetoId,l.demandaId);
   $('#l-save').onclick=()=>{
     const min=(+$('#l-h').value||0)*60+(+$('#l-m').value||0);if(min<=0){toast('Informe a duração');return}
-    const dados={projetoId:$('#l-p').value,demandaId:$('#l-d').value,inicio:new Date($('#l-i').value).toISOString(),minutos:min,modalidade:$('#l-mod').value,faturado:$('#l-f').value==='1',descricao:$('#l-desc').value.trim()};
+    const parts=getPart('l-parts');if(!parts.length){toast('Marque quem participou');return}
+    const dados={projetoId:$('#l-p').value,demandaId:$('#l-d').value,inicio:new Date($('#l-i').value).toISOString(),minutos:min,modalidade:$('#l-mod').value,faturado:isAdmin()?$('#l-f').value==='1':!!l.faturado,descricao:$('#l-desc').value.trim(),participantes:parts};
     if(id)Object.assign(l,dados);else S.lancamentos.push({id:uid(),...dados,usuario:EU.nome||EU.email,usuarioEmail:EU.email});
     save();closeModal();render();toast('Lançamento salvo');
   };
