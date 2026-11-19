@@ -455,9 +455,18 @@ function calcular(p,lancs){
     linhas.push({desc:'Projeto em valor fechado',qtd:1,unit:+p.valorFechado,total:+p.valorFechado,fechado:true});
     servicos=+p.valorFechado;
   }
-  if(visitas>0) linhas.push({desc:`Deslocamento — ${visitas} visita(s) presencial(is) (ida ${brl(+p.deslocIda)} + volta ${brl(+p.deslocVolta)})`,qtd:visitas,unit:(+p.deslocIda)+(+p.deslocVolta),total:desloc,desloc:true});
-  return {minutos,horas,visitas,desloc,servicos,descontoParceria,total:servicos+desloc,linhas};
+  // desconto do projeto (só sobre os serviços; deslocamento não tem desconto)
+  const dt=p.descontoTipo||'nenhum', dv=+p.descontoValor||0, r2=v=>Math.round(v*100)/100;
+  const svc=linhas.slice();
+  if(dt==='percentual'&&dv>0) svc.forEach(l=>l.dsc=r2(l.total*Math.min(dv,100)/100));
+  else if(dt==='hora'&&dv>0&&p.tipo==='hora') svc.forEach(l=>l.dsc=r2(Math.min(dv,l.unit)*l.qtd));
+  else if(dt==='valor'&&dv>0){const base=svc.reduce((a,l)=>a+l.total,0);let rest=Math.min(dv,base);svc.forEach((l,i)=>{l.dsc=i===svc.length-1?r2(rest):r2(base?Math.min(dv,base)*l.total/base:0);rest-=l.dsc})}
+  let descontoTotal=0;svc.forEach(l=>{l.dsc=l.dsc||0;l.liquido=r2(l.total-l.dsc);descontoTotal+=l.dsc});
+  descontoTotal=r2(descontoTotal);const servicosLiquido=r2(servicos-descontoTotal);
+  if(visitas>0) linhas.push({desc:`Deslocamento — ${visitas} visita(s) presencial(is) (ida ${brl(+p.deslocIda)} + volta ${brl(+p.deslocVolta)})`,qtd:visitas,unit:(+p.deslocIda)+(+p.deslocVolta),total:desloc,dsc:0,liquido:desloc,desloc:true});
+  return {minutos,horas,visitas,desloc,servicos,descontoParceria,descontoTotal,servicosLiquido,total:servicosLiquido+desloc,linhas};
 }
+function descontoTexto(p){const v=+p.descontoValor||0,t=p.descontoTipo||'nenhum';if(t==='nenhum'||!v)return '';return (p.descontoNome||'Desconto')+' — '+(t==='percentual'?(v.toLocaleString('pt-BR')+'%'):t==='hora'?(brl(v)+' por hora'):(brl(v)+' no período'))}
 function lancsDe(pid,mes){return S.lancamentos.filter(l=>l.projetoId===pid&&(!mes||mesKey(l.inicio)===mes)).sort((a,b)=>a.inicio.localeCompare(b.inicio))}
 
 /* ================= Navegação ================= */
@@ -559,6 +568,7 @@ function vProjeto(){
       <div><div class="muted">Pacote mensal</div><b style="font-size:17px">${+p.franquia?p.franquia+'h'+(p.pacoteMinimo?' (mínimo garantido)':''):'Sem pacote'}</b></div>
       <div><div class="muted">Hora excedente</div><b style="font-size:17px">${brl(+p.valorExcedente)}</b></div>`:
       `<div><div class="muted">Valor fechado</div><b style="font-size:17px">${brl(+p.valorFechado)}</b></div>`}
+      <div><div class="muted">Desconto</div><b style="font-size:17px">${esc(descontoTexto(p))||'Sem desconto'}</b></div>
       <div><div class="muted">Deslocamento por visita</div><b style="font-size:17px">${brl((+p.deslocIda)+(+p.deslocVolta))}</b> <span class="muted">(ida ${brl(+p.deslocIda)} + volta ${brl(+p.deslocVolta)})</span></div>
       <div><div class="muted">Contato</div><b>${esc(p.contato||'—')}</b></div></div>
       <div class="row" style="margin-top:18px"><button class="btn" onclick="modalProjeto('${p.id}')">${ICON.edit} Editar condições</button><button class="btn primary" onclick="go('cobranca',{pid:'${p.id}'})">Gerar cobrança</button></div></div>`;
@@ -636,15 +646,17 @@ function vCobranca(){
       <div class="inv-box"><div class="muted" style="font-size:11px;font-weight:700;text-transform:uppercase">Projeto</div><b>${esc(p.nome)}</b><div>${p.tipo==='hora'?'Cobrança por hora técnica':'Valor fechado'} · ${hm(c.minutos)} trabalhadas</div></div>
     </div>
     <div class="sec-title">Resumo da cobrança</div>
-    <div class="table-wrap"><table><thead><tr><th>Descrição</th><th class="num">Qtd.</th><th class="num">Valor unit.</th><th class="num">Total</th></tr></thead><tbody>
-      ${c.linhas.map(l=>`<tr><td>${esc(l.desc)}</td><td class="num">${l.fechado?'1':l.desloc?l.qtd:hdec(l.qtd*60)+'h'}</td><td class="num">${brl(l.unit)}</td><td class="num"><b>${brl(l.total)}</b></td></tr>`).join('')}
+    <div class="table-wrap"><table><thead><tr><th>Descrição</th><th class="num">Qtd.</th><th class="num">${p.tipo==='hora'?'Valor da hora':'Valor unit.'}</th><th class="num">Valor bruto</th><th class="num">Desconto</th><th class="num">Líquido</th></tr></thead><tbody>
+      ${c.linhas.map(l=>`<tr><td>${esc(l.desc)}${!l.desloc&&!l.fechado&&l.dsc>0&&l.qtd>0?`<div class="muted" style="font-size:11.5px">Hora líquida: ${brl(l.liquido/l.qtd)}</div>`:''}</td><td class="num">${l.fechado?'1':l.desloc?l.qtd:hdec(l.qtd*60)+'h'}</td><td class="num">${brl(l.unit)}</td><td class="num">${brl(l.total)}</td><td class="num ${l.dsc>0?'discount':'muted'}">${l.dsc>0?'− '+brl(l.dsc):'—'}</td><td class="num"><b>${brl(l.liquido)}</b></td></tr>`).join('')}
     </tbody></table></div>
     <div class="inv-total"><table>
       ${c.descontoParceria>0?`<tr><td class="muted">Valor de referência (hora cheia ${brl(+p.valorCheio)})</td><td class="num strike">${brl(c.servicos+c.descontoParceria)}</td></tr>
       <tr><td class="discount">Desconto parceria — primeiro projeto</td><td class="num discount">− ${brl(c.descontoParceria)}</td></tr>`:''}
-      <tr><td>Serviços</td><td class="num">${brl(c.servicos)}</td></tr>
+      <tr><td>Serviços (bruto)</td><td class="num">${brl(c.servicos)}</td></tr>
+      ${c.descontoTotal>0?`<tr><td class="discount">${esc(descontoTexto(p))}</td><td class="num discount">− ${brl(c.descontoTotal)}</td></tr>
+      <tr><td>Serviços (líquido)</td><td class="num">${brl(c.servicosLiquido)}</td></tr>`:''}
       ${c.desloc?`<tr><td>Deslocamentos</td><td class="num">${brl(c.desloc)}</td></tr>`:''}
-      <tr class="grand"><td>Total a pagar</td><td class="num">${brl(c.total)}</td></tr></table></div>
+      <tr class="grand"><td>Total líquido a pagar</td><td class="num">${brl(c.total)}</td></tr></table></div>
     ${p.tipo==='hora'?`<div class="sec-title">Horas por demanda</div><div class="table-wrap"><table><tbody>${Object.entries(porDem).map(([k,m])=>`<tr><td>${esc(dem(k)?.titulo||'Atividades gerais')}</td><td class="num mono">${hm(m)}</td></tr>`).join('')||'<tr><td class="muted">Sem horas no período</td></tr>'}</tbody></table></div>`:''}
     <div class="sec-title">Detalhamento das horas</div>
     <div class="table-wrap"><table><thead><tr><th>Data</th><th>Demanda / atividade</th><th>Local</th><th class="num">Tempo</th></tr></thead><tbody>
@@ -679,18 +691,19 @@ function modalUsuario(email){
   const u=email?S.usuarios.find(x=>x.email===email):{nome:'',email:'',papel:'membro',ativo:true};
   openModal(`<h2>${email?'Editar usuário':'Novo usuário'}</h2><div class="fields">
     <div class="field full"><label>Nome</label><input id="u-n" value="${esc(u.nome||'')}" placeholder="Ex.: Maria Souza"></div>
-    <div class="field full"><label>E-mail</label><input id="u-e" type="email" value="${esc(u.email)}" ${email?'disabled':''} placeholder="email@empresa.com.br"><small>É com este e-mail que a pessoa faz o primeiro acesso.</small></div>
+    <div class="field full"><label>E-mail</label><input id="u-e" type="email" value="${esc(u.email)}" placeholder="email@empresa.com.br"><small>Confira letra por letra: a pessoa precisa usar exatamente este e-mail no primeiro acesso.</small></div>
     <div class="field"><label>Perfil</label><select id="u-p"><option value="membro" ${u.papel!=='admin'?'selected':''}>Membro</option><option value="admin" ${u.papel==='admin'?'selected':''}>Administrador</option></select><small>Administrador também gerencia a equipe.</small></div>
     <div class="field"><label>Situação</label><select id="u-a"><option value="1" ${u.ativo!==false?'selected':''}>Ativo</option><option value="0" ${u.ativo===false?'selected':''}>Bloqueado</option></select></div>
   </div><div class="modal-foot">${email?`<button class="btn danger" style="margin-right:auto" onclick="excluirUsuario('${esc(email)}')">${ICON.trash} Remover</button>`:''}<button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" id="u-s">Salvar</button></div>`);
   $('#u-s').onclick=async()=>{
-    const em=(email||$('#u-e').value).trim().toLowerCase();
+    const em=$('#u-e').value.trim().toLowerCase();
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){toast('Informe um e-mail válido');return}
-    if(!email&&S.usuarios.some(x=>x.email===em)){toast('Este e-mail já está cadastrado');return}
+    if(em!==email&&S.usuarios.some(x=>x.email===em)){toast('Este e-mail já está cadastrado');return}
     const dados={nome:$('#u-n').value.trim(),papel:$('#u-p').value,ativo:$('#u-a').value==='1'};
-    if(!email)dados.criadoEm=new Date().toISOString();
-    try{await db.collection('usuarios').doc(em).set(dados,{merge:true});
-      const ex=S.usuarios.find(x=>x.email===em);if(ex)Object.assign(ex,dados);else S.usuarios.push({email:em,...dados});
+    try{
+      if(email&&em!==email){const ant=S.usuarios.find(x=>x.email===email)||{};await db.collection('usuarios').doc(em).set({criadoEm:ant.criadoEm||new Date().toISOString(),...dados});await db.collection('usuarios').doc(email).delete();S.usuarios=S.usuarios.filter(x=>x.email!==email);S.usuarios.push({email:em,criadoEm:ant.criadoEm,...dados})}
+      else{if(!email)dados.criadoEm=new Date().toISOString();await db.collection('usuarios').doc(em).set(dados,{merge:true});
+      const ex=S.usuarios.find(x=>x.email===em);if(ex)Object.assign(ex,dados);else S.usuarios.push({email:em,...dados})}
       closeModal();render();toast(email?'Usuário atualizado':'Usuário cadastrado — envie o link do painel para a pessoa')}
     catch(e){toast('Erro ao salvar: '+(e.code||e.message))}
   };
@@ -782,6 +795,12 @@ function modalProjeto(id){
      <label class="field full row" style="flex-direction:row;font-weight:600;font-size:13px"><input type="checkbox" id="p-min" style="width:auto" ${p.pacoteMinimo?'checked':''}> Pacote é mínimo garantido (cobra mesmo se usar menos)</label>
    </div>
    <div id="p-fech" class="field full" style="display:${p.tipo==='fechado'?'flex':'none'}"><label>Valor fechado do projeto</label><input id="p-vf" type="number" step="0.01" value="${p.valorFechado}"></div>
+   <div class="field full" style="border-top:1px solid var(--line);padding-top:12px"><label>Desconto</label>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+       <select id="p-dt">${[['nenhum','Sem desconto'],['percentual','Percentual (%)'],['hora','Valor por hora (R$/h)'],['valor','Valor fixo no período (R$)']].map(([k,l])=>`<option value="${k}" ${(p.descontoTipo||'nenhum')===k?'selected':''}>${l}</option>`).join('')}</select>
+       <input id="p-dvv" type="number" step="0.01" min="0" value="${p.descontoValor||''}" placeholder="Valor do desconto">
+       <input id="p-dn" style="grid-column:1/-1" value="${esc(p.descontoNome||'')}" placeholder="Nome no demonstrativo (ex.: Desconto parceria)">
+     </div><small>Vale para pacote, horas e valor fechado. Não se aplica ao deslocamento. "Valor por hora" só funciona em projetos por hora.</small></div>
    <div class="field"><label>Deslocamento — ida</label><input id="p-di" type="number" step="0.01" value="${p.deslocIda}"></div>
    <div class="field"><label>Deslocamento — volta</label><input id="p-dv" type="number" step="0.01" value="${p.deslocVolta}"></div>
    <div class="field"><label>Status</label><select id="p-st">${[['ativo','Ativo'],['pausado','Pausado'],['encerrado','Encerrado']].map(([k,l])=>`<option value="${k}" ${p.status===k?'selected':''}>${l}</option>`).join('')}</select></div>
@@ -792,7 +811,7 @@ function modalProjeto(id){
   document.querySelectorAll('.cor-b').forEach(b=>b.onclick=()=>{cor=b.dataset.c;document.querySelectorAll('.cor-b').forEach(x=>x.style.borderColor=x===b?'#14213d':'#fff')});
   $('#p-save').onclick=()=>{
     const nome=$('#p-nome').value.trim();if(!nome){toast('Informe o nome do projeto');return}
-    const dados={nome,cliente:$('#p-cli').value.trim(),contato:$('#p-cont').value.trim(),tipo,valorCheio:+$('#p-cheio').value||0,valorHora:+$('#p-vh').value||0,franquia:+$('#p-fr').value||0,valorExcedente:+$('#p-exc').value||0,pacoteMinimo:$('#p-min').checked,valorFechado:+$('#p-vf').value||0,deslocIda:+$('#p-di').value||0,deslocVolta:+$('#p-dv').value||0,status:$('#p-st').value,cor};
+    const dados={nome,cliente:$('#p-cli').value.trim(),contato:$('#p-cont').value.trim(),tipo,valorCheio:+$('#p-cheio').value||0,valorHora:+$('#p-vh').value||0,franquia:+$('#p-fr').value||0,valorExcedente:+$('#p-exc').value||0,pacoteMinimo:$('#p-min').checked,valorFechado:+$('#p-vf').value||0,deslocIda:+$('#p-di').value||0,deslocVolta:+$('#p-dv').value||0,status:$('#p-st').value,cor,descontoTipo:$('#p-dt').value,descontoValor:+$('#p-dvv').value||0,descontoNome:$('#p-dn').value.trim()};
     if(id)Object.assign(proj(id),dados);else{const n={id:uid(),inicio:new Date().toISOString(),...dados};S.projetos.push(n);ctx={id:n.id};view='projeto'}
     save();closeModal();render();toast('Projeto salvo');
   };
