@@ -622,7 +622,7 @@ function vProjeto(){
   }
   return `<div class="top"><div class="row"><button class="btn icon" onclick="go('projetos')">${ICON.back}</button>
     <div><h1 style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:${p.cor};width:12px;height:12px"></span>${esc(p.nome)}</h1><div class="sub">${esc(p.cliente)}${adm?' · '+(p.tipo==='hora'?'Cobrança por hora':'Valor fechado'):''}</div></div></div>
-    ${adm?`<div class="row"><button class="btn" onclick="modalProjeto('${p.id}')">${ICON.edit} Editar</button><button class="btn primary" onclick="go('cobranca',{pid:'${p.id}'})">Gerar cobrança</button></div>`:''}</div>
+    ${adm?`<div class="row"><button class="btn" onclick="modalProjeto('${p.id}')">${ICON.edit} Editar</button><button class="btn" onclick="go('repasses',{pid:'${p.id}'})">Repasses</button><button class="btn primary" onclick="go('cobranca',{pid:'${p.id}'})">Gerar cobrança</button></div>`:''}</div>
   ${adm?`<div class="grid kpis">
     <div class="card kpi"><div class="label">Horas no mês</div><div class="value">${hm(c.minutos)}</div><div class="hint">${p.tipo==='hora'&&+p.franquia?`pacote: ${p.franquia}h`:'informativo'}</div></div>
     <div class="card kpi"><div class="label">Valor do mês</div><div class="value">${brl(c.total)}</div><div class="hint">serviços + deslocamento</div></div>
@@ -726,11 +726,11 @@ function horaEquipeAuto(p){
   return Math.max(0,Math.round(v*100)/100);
 }
 const horaEquipe=p=>(p&&+p.valorHoraEquipe>0)?+p.valorHoraEquipe:horaEquipeAuto(p);
-function ganhoPessoa(email,mesFiltro){
+function ganhoPessoa(email,mesFiltro,pidFiltro){
   const taxa=+S.repasses[email]||0;
   let min=0,solo=0,vSolo=0,vEq=0;const proj={},eq={};
   S.lancamentos.forEach(l=>{
-    if(mesFiltro&&mesKey(l.inicio)!==mesFiltro)return;const ps=partsDe(l);if(!ps.includes(email))return;
+    if(mesFiltro&&mesKey(l.inicio)!==mesFiltro)return;if(pidFiltro&&l.projetoId!==pidFiltro)return;const ps=partsDe(l);if(!ps.includes(email))return;
     min+=l.minutos;proj[l.projetoId]=(proj[l.projetoId]||0)+l.minutos;
     if(ps.length===1){solo+=l.minutos;vSolo+=l.minutos/60*taxa;return}
     const vh=horaEquipe(proj_(l.projetoId));const r=vh!=null?vh/ps.length:taxa;vEq+=l.minutos/60*r;
@@ -740,67 +740,85 @@ function ganhoPessoa(email,mesFiltro){
   return {min,solo,proj,taxa,eq:Object.values(eq),valorSolo:r2(vSolo),valorEquipe:r2(vEq),valor:r2(vSolo+vEq)};
 }
 const proj_=id=>S.projetos.find(p=>p.id===id);
-const pagoPessoa=(email,mesFiltro)=>S.pagamentos.filter(p=>p.email===email&&(!mesFiltro||p.competencia===mesFiltro)).reduce((a,p)=>a+(+p.valor||0),0);
-function repassesMes(mes){
-  const emails=new Set(equipeLista().map(u=>u.email));
-  S.lancamentos.filter(l=>mesKey(l.inicio)===mes).forEach(l=>partsDe(l).forEach(e=>emails.add(e)));
-  S.pagamentos.filter(p=>p.competencia===mes).forEach(p=>emails.add(p.email));
-  const pessoas=[...emails].map(e=>{const g=ganhoPessoa(e,mes),pago=pagoPessoa(e,mes);return {email:e,nome:nomeDe(e),...g,pago,saldo:Math.round((g.valor-pago)*100)/100}})
+const pagoPessoa=(email,mesFiltro,pidFiltro)=>S.pagamentos.filter(p=>p.email===email&&(!mesFiltro||p.competencia===mesFiltro)&&(!pidFiltro||p.projetoId===pidFiltro)).reduce((a,p)=>a+(+p.valor||0),0);
+function repassesMes(mes,pid){
+  const emails=new Set(pid?[]:equipeLista().map(u=>u.email));
+  S.lancamentos.filter(l=>mesKey(l.inicio)===mes&&(!pid||l.projetoId===pid)).forEach(l=>partsDe(l).forEach(e=>emails.add(e)));
+  S.pagamentos.filter(p=>p.competencia===mes&&(!pid||p.projetoId===pid)).forEach(p=>emails.add(p.email));
+  const pessoas=[...emails].map(e=>{const g=ganhoPessoa(e,mes,pid),pago=pagoPessoa(e,mes,pid);return {email:e,nome:nomeDe(e),...g,pago,saldo:Math.round((g.valor-pago)*100)/100}})
     .sort((a,b)=>b.min-a.min||a.nome.localeCompare(b.nome));
   return {pessoas,total:pessoas.reduce((a,r)=>a+r.valor,0),pago:pessoas.reduce((a,r)=>a+r.pago,0)};
 }
+const corSaldo=v=>v>0.004?'var(--warn)':v<-0.004?'var(--blue)':'var(--ok)';
+const txtSaldo=v=>v<-0.004?'+'+brl(-v)+' adiantado':brl(v);
+function blocoRepasseProjeto(p,mes){
+  const R=repassesMes(mes,p.id);const c=calcular(p,lancsDe(p.id,mes));
+  const sobra=c.total-R.total;
+  const pags=S.pagamentos.filter(x=>x.competencia===mes&&x.projetoId===p.id).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  return `<div class="card" style="margin-top:14px">
+    <div class="row between wrap"><h2 style="display:flex;align-items:center;gap:8px;margin:0"><span class="dot" style="background:${p.cor}"></span>${esc(p.nome)}</h2>
+      <button class="btn sm primary" onclick="modalPagamento('','${mes}','','${p.id}')">${ICON.plus} Registrar pagamento</button></div>
+    <div class="grid kpis" style="margin-top:12px">
+      <div class="card kpi" style="box-shadow:none"><div class="label">Faturado</div><div class="value">${brl(c.total)}</div><div class="hint">serviços ${brl(c.servicosLiquido)}${c.desloc?' + desloc. '+brl(c.desloc):''} · ${hm(c.minutos)}</div></div>
+      <div class="card kpi" style="box-shadow:none"><div class="label">A pagar à equipe</div><div class="value">${brl(R.total)}</div><div class="hint">hora em equipe: ${horaEquipe(p)!=null?brl(horaEquipe(p))+' ÷ pessoas':'valor/hora de cada um'}</div></div>
+      <div class="card kpi" style="box-shadow:none"><div class="label">Já pago</div><div class="value">${brl(R.pago)}</div><div class="hint">falta ${brl(Math.max(0,R.total-R.pago))}</div></div>
+      <div class="card kpi" style="box-shadow:none"><div class="label">Sobra do projeto</div><div class="value" style="color:${sobra>=0?'var(--ok)':'var(--danger)'}">${brl(sobra)}</div><div class="hint">faturado − equipe</div></div>
+    </div>
+    ${R.pessoas.length?`<div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Pessoa</th><th class="num">Sozinho</th><th class="num">Em equipe</th><th class="num">A receber</th><th class="num">Pago</th><th class="num">Saldo</th><th></th></tr></thead><tbody>
+    ${R.pessoas.map(r=>`<tr><td><b>${esc(r.nome)}</b>${r.email===EU.email?' <span class="tag teal">você</span>':''}${r.min&&!r.taxa&&r.solo?'<div style="font-size:11.5px;color:var(--warn)">sem valor/hora para horas sozinho</div>':''}</td>
+      <td class="num"><span class="mono"><b>${hm(r.solo)}</b></span><div class="muted" style="font-size:11.5px">${r.solo?`× ${brl(r.taxa)} = ${brl(r.valorSolo)}`:''}</div></td>
+      <td class="num"><span class="mono"><b>${hm(r.min-r.solo)}</b></span>${r.eq.map(e=>`<div class="muted" style="font-size:11.5px">${hm(e.min)} × ${brl(e.rate)} (÷${e.n})</div>`).join('')}</td>
+      <td class="num"><b>${brl(r.valor)}</b></td><td class="num">${r.pago?brl(r.pago):'<span class="muted">—</span>'}</td>
+      <td class="num"><b style="color:${corSaldo(r.saldo)}">${txtSaldo(r.saldo)}</b></td>
+      <td class="num" style="white-space:nowrap"><button class="btn sm" onclick="modalPagamento('${esc(r.email)}','${mes}','','${p.id}')">💲 Baixa</button> <button class="btn icon sm" title="Valor/hora" onclick="modalTaxa('${esc(r.email)}')">${ICON.edit}</button></td></tr>`).join('')}
+    <tr><td colspan="3" style="text-align:right"><b>Total</b></td><td class="num"><b>${brl(R.total)}</b></td><td class="num"><b>${brl(R.pago)}</b></td><td class="num"><b>${brl(R.total-R.pago)}</b></td><td></td></tr>
+    </tbody></table></div>`:'<div class="empty">Sem horas da equipe neste mês</div>'}
+    ${pags.length?`<div class="sec-title">Pagamentos registrados</div><div class="table-wrap"><table><tbody>${pags.map(x=>`<tr><td style="white-space:nowrap">${x.data?fdata(x.data+'T12:00'):'—'}</td><td><b>${esc(nomeDe(x.email))}</b></td><td class="muted">${esc(x.obs||'')}</td><td class="num"><b>${brl(+x.valor)}</b></td><td class="num"><button class="btn icon sm" onclick="modalPagamento('${esc(x.email)}','${mes}','${x.id}')">${ICON.edit}</button></td></tr>`).join('')}</tbody></table></div>`:''}
+  </div>`;
+}
 function vRepasses(){
   if(!isAdmin())return '<div class="card empty">Acesso restrito ao administrador.</div>';
-  const mes=ctx.mes||mesAtual();const R=repassesMes(mes);
-  let fat=0;S.projetos.forEach(p=>{const ls=lancsDe(p.id,mes);if(ls.length||(p.status==='ativo'&&p.tipo==='hora'&&p.pacoteMinimo))fat+=calcular(p,ls).total});
-  const sem=R.pessoas.filter(r=>r.min>0&&!r.taxa);
-  const pagsMes=S.pagamentos.filter(p=>p.competencia===mes).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
-  const acum=[...new Set([...equipeLista().map(u=>u.email),...S.pagamentos.map(p=>p.email)])].map(e=>{const g=ganhoPessoa(e),pago=pagoPessoa(e);return {email:e,nome:nomeDe(e),valor:g.valor,min:g.min,pago,saldo:Math.round((g.valor-pago)*100)/100}}).filter(r=>r.min||r.pago).sort((a,b)=>a.nome.localeCompare(b.nome));
-  const cor=v=>v>0.004?'var(--warn)':v<-0.004?'var(--blue)':'var(--ok)';
-  return `<div class="top"><div><h1>Repasses</h1><div class="sub">Quanto cada pessoa ganhou pelas horas, quanto já recebeu e o que falta pagar (incluindo você)</div></div>
-    <button class="btn primary" onclick="modalPagamento('', '${mes}')">${ICON.plus} Registrar pagamento</button></div>
-  <div class="toolbar"><div class="field"><label>Competência</label><select onchange="go('repasses',{mes:this.value})">${opcoesMes(mes,false)}</select></div></div>
-  <div class="grid kpis">
-    <div class="card kpi"><div class="label">Faturamento do mês</div><div class="value">${brl(fat)}</div><div class="hint">total líquido dos projetos</div></div>
-    <div class="card kpi"><div class="label">Ganho da equipe</div><div class="value">${brl(R.total)}</div><div class="hint">horas × valor/hora</div></div>
-    <div class="card kpi"><div class="label">Já pago</div><div class="value">${brl(R.pago)}</div><div class="hint">baixas desta competência</div></div>
-    <div class="card kpi"><div class="label">Falta pagar</div><div class="value" style="color:${cor(R.total-R.pago)}">${brl(R.total-R.pago)}</div><div class="hint">ganho − pago</div></div>
+  const mes=ctx.mes||mesAtual(), pid=ctx.pid||'';
+  const ativos=S.projetos.filter(p=>p.id===pid||(!pid&&(lancsDe(p.id,mes).length||S.pagamentos.some(x=>x.competencia===mes&&x.projetoId===p.id)||(p.status==='ativo'&&p.tipo==='hora'&&p.pacoteMinimo))));
+  let fat=0,eq=0,pago=0;ativos.forEach(p=>{fat+=calcular(p,lancsDe(p.id,mes)).total;const R=repassesMes(mes,p.id);eq+=R.total;pago+=R.pago});
+  const semProj=S.pagamentos.filter(x=>x.competencia===mes&&!x.projetoId);
+  const acum=[...new Set([...equipeLista().map(u=>u.email),...S.pagamentos.map(p=>p.email)])].map(e=>{const g=ganhoPessoa(e),pg=pagoPessoa(e);return {email:e,nome:nomeDe(e),valor:g.valor,min:g.min,pago:pg,saldo:Math.round((g.valor-pg)*100)/100}}).filter(r=>r.min||r.pago).sort((a,b)=>a.nome.localeCompare(b.nome));
+  return `<div class="top"><div><h1>Repasses</h1><div class="sub">Por projeto: quanto foi faturado e quanto pagar a cada pessoa da equipe (incluindo você)</div></div></div>
+  <div class="toolbar">
+    <div class="field"><label>Competência</label><select onchange="go('repasses',{mes:this.value,pid:'${pid}'})">${opcoesMes(mes,false)}</select></div>
+    <div class="field"><label>Projeto</label><select onchange="go('repasses',{mes:'${mes}',pid:this.value})"><option value="">Todos com movimento</option>${S.projetos.map(p=>`<option value="${p.id}" ${pid===p.id?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></div>
   </div>
-  ${sem.length?`<div class="card" style="margin-top:14px;background:var(--warn-soft);border-color:#fcd34d;color:var(--warn)"><b>Falta o valor/hora de:</b> ${sem.map(r=>esc(r.nome)).join(', ')}. Clique no lápis para definir.</div>`:''}
-  <div class="card" style="margin-top:14px;padding:6px 12px"><div class="table-wrap"><table><thead><tr><th>Pessoa</th><th class="num">Sozinho</th><th class="num">Em equipe</th><th class="num">Ganhou no mês</th><th class="num">Pago</th><th class="num">Saldo</th><th></th></tr></thead><tbody>
-  ${R.pessoas.map(r=>`<tr><td><b>${esc(r.nome)}</b>${r.email===EU.email?' <span class="tag teal">você</span>':''}
-      <div class="muted" style="font-size:12px">${Object.entries(r.proj).map(([pid,m])=>`${esc(proj(pid)?.nome||'Projeto removido')}: ${hm(m)}`).join(' · ')||'Sem horas no mês'}</div></td>
-    <td class="num"><span class="mono"><b>${hm(r.solo)}</b></span><div class="muted" style="font-size:11.5px">${r.solo?(r.taxa?`× ${brl(r.taxa)} = ${brl(r.valorSolo)}`:'sem valor/hora'):(r.taxa?`${brl(r.taxa)}/h`:'')}</div></td>
-    <td class="num"><span class="mono"><b>${hm(r.min-r.solo)}</b></span>${r.eq.map(e=>`<div class="muted" style="font-size:11.5px">${hm(e.min)} × ${brl(e.rate)} <span title="${esc(proj(e.pid)?.nome||'')}">(÷${e.n})</span></div>`).join('')}</td>
-    <td class="num"><b>${brl(r.valor)}</b></td>
-    <td class="num">${r.pago?brl(r.pago):'<span class="muted">—</span>'}</td>
-    <td class="num"><b style="color:${cor(r.saldo)}">${r.saldo<-0.004?'+'+brl(-r.saldo)+' adiantado':brl(r.saldo)}</b></td>
-    <td class="num" style="white-space:nowrap"><button class="btn sm" title="Registrar pagamento" onclick="modalPagamento('${esc(r.email)}','${mes}')">💲 Baixa</button> <button class="btn icon sm" title="Valor/hora" onclick="modalTaxa('${esc(r.email)}')">${ICON.edit}</button></td></tr>`).join('')}
-  <tr><td colspan="3" style="text-align:right"><b>Total</b></td><td class="num"><b>${brl(R.total)}</b></td><td class="num"><b>${brl(R.pago)}</b></td><td class="num"><b>${brl(R.total-R.pago)}</b></td><td></td></tr>
-  </tbody></table></div></div>
-  <div class="card" style="margin-top:14px"><h2>Pagamentos de ${esc(mesNome(mes))}</h2>
-    ${pagsMes.length?`<div class="table-wrap"><table><thead><tr><th>Data</th><th>Pessoa</th><th>Observação</th><th class="num">Valor</th><th></th></tr></thead><tbody>
-    ${pagsMes.map(p=>`<tr><td style="white-space:nowrap">${p.data?fdata(p.data+'T12:00'):'—'}</td><td><b>${esc(nomeDe(p.email))}</b></td><td class="muted">${esc(p.obs||'')}</td><td class="num"><b>${brl(+p.valor)}</b></td>
-      <td class="num"><button class="btn icon sm" title="Editar" onclick="modalPagamento('${esc(p.email)}','${mes}','${p.id}')">${ICON.edit}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhum pagamento registrado nesta competência</div>'}</div>
-  <div class="card" style="margin-top:14px"><h2>Acumulado (todos os meses)</h2>
+  ${!pid&&ativos.length>1?`<div class="grid kpis">
+    <div class="card kpi"><div class="label">Faturado (todos)</div><div class="value">${brl(fat)}</div></div>
+    <div class="card kpi"><div class="label">A pagar à equipe</div><div class="value">${brl(eq)}</div></div>
+    <div class="card kpi"><div class="label">Já pago</div><div class="value">${brl(pago)}</div></div>
+    <div class="card kpi"><div class="label">Sobra</div><div class="value" style="color:${fat-eq>=0?'var(--ok)':'var(--danger)'}">${brl(fat-eq)}</div></div></div>`:''}
+  ${ativos.map(p=>blocoRepasseProjeto(p,mes)).join('')||'<div class="card empty" style="margin-top:14px">Nenhum projeto com movimento nesta competência</div>'}
+  ${semProj.length?`<div class="card" style="margin-top:14px;background:var(--warn-soft);border-color:#fcd34d"><b style="color:var(--warn)">Pagamentos sem projeto</b> — edite para escolher o projeto:
+    <div class="table-wrap"><table><tbody>${semProj.map(x=>`<tr><td>${x.data?fdata(x.data+'T12:00'):'—'}</td><td><b>${esc(nomeDe(x.email))}</b></td><td class="muted">${esc(x.obs||'')}</td><td class="num"><b>${brl(+x.valor)}</b></td><td class="num"><button class="btn icon sm" onclick="modalPagamento('${esc(x.email)}','${mes}','${x.id}')">${ICON.edit}</button></td></tr>`).join('')}</tbody></table></div></div>`:''}
+  <div class="card" style="margin-top:14px"><h2>Acumulado por pessoa (todos os projetos e meses)</h2>
     ${acum.length?`<div class="table-wrap"><table><thead><tr><th>Pessoa</th><th class="num">Horas</th><th class="num">Ganhou</th><th class="num">Recebeu</th><th class="num">Saldo</th></tr></thead><tbody>
-    ${acum.map(r=>`<tr><td><b>${esc(r.nome)}</b>${r.email===EU.email?' <span class="tag teal">você</span>':''}</td><td class="num mono">${hm(r.min)}</td><td class="num">${brl(r.valor)}</td><td class="num">${brl(r.pago)}</td><td class="num"><b style="color:${cor(r.saldo)}">${r.saldo<-0.004?'+'+brl(-r.saldo)+' adiantado':brl(r.saldo)}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem movimento ainda</div>'}</div>
-  <p class="muted" style="font-size:12.5px;margin-top:10px"><b>Sozinho:</b> horas × valor/hora da pessoa (lápis). <b>Em equipe:</b> valor da hora do projeto já com desconto, dividido pelo número de pessoas no lançamento (ex.: R$ 115 ÷ 2 = R$ 57,50 por hora para cada). Projetos de valor fechado usam o valor/hora da pessoa, a não ser que você defina "Valor da hora em equipe" no projeto. <br>Use <b>💲 Baixa</b> para registrar o que já foi pago (ou o que você mesmo já recebeu do cliente). Quando duas ou mais pessoas trabalham juntas, cada uma ganha pelas horas dela; o cliente é cobrado pelo tempo do lançamento uma única vez.</p>`;
+    ${acum.map(r=>`<tr><td><b>${esc(r.nome)}</b>${r.email===EU.email?' <span class="tag teal">você</span>':''}</td><td class="num mono">${hm(r.min)}</td><td class="num">${brl(r.valor)}</td><td class="num">${brl(r.pago)}</td><td class="num"><b style="color:${corSaldo(r.saldo)}">${txtSaldo(r.saldo)}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem movimento ainda</div>'}</div>
+  <p class="muted" style="font-size:12.5px;margin-top:10px"><b>Sozinho:</b> horas × valor/hora da pessoa (lápis). <b>Em equipe:</b> valor da hora do projeto já com desconto ÷ número de pessoas no lançamento. Cada pagamento (💲 Baixa) fica ligado a um projeto.</p>`;
 }
-function modalPagamento(email,mes,id){
-  const p=id?S.pagamentos.find(x=>x.id===id):{email:email||EU.email,valor:'',data:new Date().toISOString().slice(0,10),competencia:mes||mesAtual(),obs:''};
+function modalPagamento(email,mes,id,pidPadrao){
+  const p=id?S.pagamentos.find(x=>x.id===id):{email:email||EU.email,valor:'',data:new Date().toISOString().slice(0,10),competencia:mes||mesAtual(),obs:'',projetoId:pidPadrao||ctx.pid||''};
   const pessoas=[...new Set([...equipeLista().map(u=>u.email),p.email].filter(Boolean))];
-  const g=ganhoPessoa(p.email,p.competencia),saldo=Math.round((g.valor-pagoPessoa(p.email,p.competencia))*100)/100;
+  const saldoDe=(e,c,pj)=>Math.round((ganhoPessoa(e,c,pj).valor-pagoPessoa(e,c,pj))*100)/100;
+  const saldo=p.projetoId?saldoDe(p.email,p.competencia,p.projetoId):0;
   openModal(`<h2>${id?'Editar pagamento':'Registrar pagamento (baixa)'}</h2><div class="fields">
+    <div class="field full"><label>Projeto</label><select id="pg-p"><option value="">— escolha —</option>${S.projetos.map(x=>`<option value="${x.id}" ${x.id===p.projetoId?'selected':''}>${esc(x.nome)}</option>`).join('')}</select></div>
     <div class="field full"><label>Pessoa</label><select id="pg-e">${pessoas.map(e=>`<option value="${esc(e)}" ${e===p.email?'selected':''}>${esc(nomeDe(e))}${e===EU.email?' (você)':''}</option>`).join('')}</select></div>
-    <div class="field"><label>Valor pago (R$)</label><input id="pg-v" type="number" step="0.01" min="0" value="${p.valor}" placeholder="${!id&&saldo>0?saldo.toFixed(2):'0,00'}">${!id?`<small>Saldo desta competência: ${brl(saldo)}</small>`:''}</div>
+    <div class="field"><label>Valor pago (R$)</label><input id="pg-v" type="number" step="0.01" min="0" value="${p.valor}" placeholder="${!id&&saldo>0?saldo.toFixed(2):'0.00'}"><small id="pg-sal">${!id&&p.projetoId?'Saldo neste projeto: '+brl(saldo):''}</small></div>
     <div class="field"><label>Data do pagamento</label><input id="pg-d" type="date" value="${esc(p.data||'')}"></div>
     <div class="field"><label>Competência (mês das horas)</label><select id="pg-c">${opcoesMes(p.competencia,false)}</select></div>
     <div class="field"><label>Observação</label><input id="pg-o" value="${esc(p.obs||'')}" placeholder="Ex.: PIX / recebido do cliente"></div>
   </div><div class="modal-foot">${id?`<button class="btn danger" style="margin-right:auto" onclick="excluirPagamento('${id}')">${ICON.trash} Excluir</button>`:''}<button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" id="pg-s">Salvar</button></div>`);
+  if(!id){const upd=()=>{const pj=$('#pg-p').value,e=$('#pg-e').value,c=$('#pg-c').value;const sd=pj?saldoDe(e,c,pj):0;$('#pg-v').placeholder=sd>0?sd.toFixed(2):'0.00';$('#pg-sal').textContent=pj?'Saldo neste projeto: '+brl(sd):''};['#pg-p','#pg-e','#pg-c'].forEach(q=>$(q).onchange=upd)}
   $('#pg-s').onclick=async()=>{
-    const valor=+($('#pg-v').value||$('#pg-v').placeholder.replace(',','.'))||0;if(valor<=0){toast('Informe o valor pago');return}
-    const dados={email:$('#pg-e').value,valor,data:$('#pg-d').value,competencia:$('#pg-c').value,obs:$('#pg-o').value.trim(),registradoEm:new Date().toISOString()};
+    const projetoId=$('#pg-p').value;if(!projetoId){toast('Escolha o projeto');return}
+    const valor=+($('#pg-v').value||$('#pg-v').placeholder)||0;if(valor<=0){toast('Informe o valor pago');return}
+    const dados={email:$('#pg-e').value,projetoId,valor,data:$('#pg-d').value,competencia:$('#pg-c').value,obs:$('#pg-o').value.trim(),registradoEm:new Date().toISOString()};
     const pid=id||uid();
     try{await db.collection('pagamentos').doc(pid).set(dados);
       if(id)Object.assign(p,dados);else S.pagamentos.push({id:pid,...dados});
