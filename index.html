@@ -732,12 +732,13 @@ function ganhoPessoa(email,mesFiltro,pidFiltro){
   S.lancamentos.forEach(l=>{
     if(mesFiltro&&mesKey(l.inicio)!==mesFiltro)return;if(pidFiltro&&l.projetoId!==pidFiltro)return;const ps=partsDe(l);if(!ps.includes(email))return;
     min+=l.minutos;proj[l.projetoId]=(proj[l.projetoId]||0)+l.minutos;
-    if(ps.length===1){solo+=l.minutos;vSolo+=l.minutos/60*taxa;return}
+    if(ps.length===1){solo+=l.minutos;const pr=proj_(l.projetoId);const ts=(email===DONO&&pr&&horaEquipe(pr)!=null)?horaEquipe(pr):taxa;vSolo+=l.minutos/60*ts;return}
     const vh=horaEquipe(proj_(l.projetoId));const r=vh!=null?vh/ps.length:taxa;vEq+=l.minutos/60*r;
     const k=l.projetoId+'|'+ps.length;(eq[k]=eq[k]||{pid:l.projetoId,n:ps.length,rate:r,min:0}).min+=l.minutos;
   });
   const r2=v=>Math.round(v*100)/100;
-  return {min,solo,proj,taxa,eq:Object.values(eq),valorSolo:r2(vSolo),valorEquipe:r2(vEq),valor:r2(vSolo+vEq)};
+  const taxaSolo=solo?r2(vSolo/(solo/60)):taxa;
+  return {min,solo,proj,taxa:taxaSolo,eq:Object.values(eq),valorSolo:r2(vSolo),valorEquipe:r2(vEq),valor:r2(vSolo+vEq)};
 }
 const proj_=id=>S.projetos.find(p=>p.id===id);
 const pagoPessoa=(email,mesFiltro,pidFiltro)=>S.pagamentos.filter(p=>p.email===email&&(!mesFiltro||p.competencia===mesFiltro)&&(!pidFiltro||p.projetoId===pidFiltro)).reduce((a,p)=>a+(+p.valor||0),0);
@@ -762,7 +763,7 @@ function blocoRepasseProjeto(p,mes){
       <div class="card kpi" style="box-shadow:none"><div class="label">Faturado</div><div class="value">${brl(c.total)}</div><div class="hint">serviços ${brl(c.servicosLiquido)}${c.desloc?' + desloc. '+brl(c.desloc):''} · ${hm(c.minutos)}</div></div>
       <div class="card kpi" style="box-shadow:none"><div class="label">A pagar à equipe</div><div class="value">${brl(R.total)}</div><div class="hint">hora em equipe: ${horaEquipe(p)!=null?brl(horaEquipe(p))+' ÷ pessoas':'valor/hora de cada um'}</div></div>
       <div class="card kpi" style="box-shadow:none"><div class="label">Já pago</div><div class="value">${brl(R.pago)}</div><div class="hint">falta ${brl(Math.max(0,R.total-R.pago))}</div></div>
-      <div class="card kpi" style="box-shadow:none"><div class="label">Sobra do projeto</div><div class="value" style="color:${sobra>=0?'var(--ok)':'var(--danger)'}">${brl(sobra)}</div><div class="hint">faturado − equipe</div></div>
+      <div class="card kpi" style="box-shadow:none"><div class="label">Sua margem</div><div class="value" style="color:${sobra>=0?'var(--ok)':'var(--danger)'}">${brl(sobra)}</div><div class="hint">faturado − equipe · total seu: ${brl(((R.pessoas.find(x=>x.email===DONO)||{}).valor||0)+sobra)}</div></div>
     </div>
     ${R.pessoas.length?`<div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Pessoa</th><th class="num">Sozinho</th><th class="num">Em equipe</th><th class="num">A receber</th><th class="num">Pago</th><th class="num">Saldo</th><th></th></tr></thead><tbody>
     ${R.pessoas.map(r=>`<tr><td><b>${esc(r.nome)}</b>${r.email===EU.email?' <span class="tag teal">você</span>':''}${r.min&&!r.taxa&&r.solo?'<div style="font-size:11.5px;color:var(--warn)">sem valor/hora para horas sozinho</div>':''}</td>
