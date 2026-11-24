@@ -247,7 +247,7 @@ const PIN_LEN=4, PIN_MAX_TENT=5, BLOQUEIO_MIN=5;
 let S=null, synced=null, saving=Promise.resolve(), pendente=false;
 let EU=null, syncedTimer='null';
 const isAdmin=()=>!!EU&&(EU.papel==='admin'||EU.email===DONO);
-const FIN=['valorCheio','valorHora','franquia','valorExcedente','pacoteMinimo','valorFechado','deslocIda','deslocVolta','descontoTipo','descontoValor','descontoNome'];
+const FIN=['valorCheio','valorHora','franquia','valorExcedente','pacoteMinimo','valorFechado','deslocIda','deslocVolta','descontoTipo','descontoValor','descontoNome','valorHoraEquipe'];
 const pubProj=p=>{const o={};for(const k in p)if(!FIN.includes(k))o[k]=p[k];return o};
 const finProj=p=>{const o={};FIN.forEach(k=>{if(p[k]!==undefined)o[k]=p[k]});return o};
 function vazio(){return {perfil:{nome:'62.019.887 GUSTAVO SOARES DE OLIVEIRA',doc:'CNPJ 62.019.887/0001-17',email:'',pix:'PIX — chave CNPJ 62.019.887/0001-17'},projetos:[],demandas:[],lancamentos:[],usuarios:[],equipe:[],repasses:{},pagamentos:[],timer:null}}
@@ -615,6 +615,7 @@ function vProjeto(){
       <div><div class="muted">Hora excedente</div><b style="font-size:17px">${brl(+p.valorExcedente)}</b></div>`:
       `<div><div class="muted">Valor fechado</div><b style="font-size:17px">${brl(+p.valorFechado)}</b></div>`}
       <div><div class="muted">Desconto</div><b style="font-size:17px">${esc(descontoTexto(p))||'Sem desconto'}</b></div>
+      <div><div class="muted">Hora em equipe (repasse)</div><b style="font-size:17px">${horaEquipe(p)!=null?brl(horaEquipe(p))+' ÷ pessoas':'Valor/hora de cada pessoa'}</b></div>
       <div><div class="muted">Deslocamento por visita</div><b style="font-size:17px">${brl((+p.deslocIda)+(+p.deslocVolta))}</b> <span class="muted">(ida ${brl(+p.deslocIda)} + volta ${brl(+p.deslocVolta)})</span></div>
       <div><div class="muted">Contato</div><b>${esc(p.contato||'—')}</b></div></div>
       <div class="row" style="margin-top:18px"><button class="btn" onclick="modalProjeto('${p.id}')">${ICON.edit} Editar condições</button><button class="btn primary" onclick="go('cobranca',{pid:'${p.id}'})">Gerar cobrança</button></div></div>`;
@@ -717,11 +718,28 @@ function vCobranca(){
 }
 
 /* ================= Repasses (admin) ================= */
-function ganhoPessoa(email,mesFiltro){
-  let min=0,solo=0;const proj={};
-  S.lancamentos.forEach(l=>{if(mesFiltro&&mesKey(l.inicio)!==mesFiltro)return;const ps=partsDe(l);if(!ps.includes(email))return;min+=l.minutos;if(ps.length===1)solo+=l.minutos;proj[l.projetoId]=(proj[l.projetoId]||0)+l.minutos});
-  const taxa=+S.repasses[email]||0;return {min,solo,proj,taxa,valor:Math.round(min/60*taxa*100)/100};
+// Valor da hora usado para dividir entre a equipe: hora praticada do projeto já com desconto (ou valor manual do projeto)
+function horaEquipeAuto(p){
+  if(!p||p.tipo!=='hora')return null;
+  let v=+p.valorHora||0;const dt=p.descontoTipo||'nenhum',dv=+p.descontoValor||0;
+  if(dt==='percentual')v=v*(1-Math.min(dv,100)/100);else if(dt==='hora')v=v-dv;
+  return Math.max(0,Math.round(v*100)/100);
 }
+const horaEquipe=p=>(p&&+p.valorHoraEquipe>0)?+p.valorHoraEquipe:horaEquipeAuto(p);
+function ganhoPessoa(email,mesFiltro){
+  const taxa=+S.repasses[email]||0;
+  let min=0,solo=0,vSolo=0,vEq=0;const proj={},eq={};
+  S.lancamentos.forEach(l=>{
+    if(mesFiltro&&mesKey(l.inicio)!==mesFiltro)return;const ps=partsDe(l);if(!ps.includes(email))return;
+    min+=l.minutos;proj[l.projetoId]=(proj[l.projetoId]||0)+l.minutos;
+    if(ps.length===1){solo+=l.minutos;vSolo+=l.minutos/60*taxa;return}
+    const vh=horaEquipe(proj_(l.projetoId));const r=vh!=null?vh/ps.length:taxa;vEq+=l.minutos/60*r;
+    const k=l.projetoId+'|'+ps.length;(eq[k]=eq[k]||{pid:l.projetoId,n:ps.length,rate:r,min:0}).min+=l.minutos;
+  });
+  const r2=v=>Math.round(v*100)/100;
+  return {min,solo,proj,taxa,eq:Object.values(eq),valorSolo:r2(vSolo),valorEquipe:r2(vEq),valor:r2(vSolo+vEq)};
+}
+const proj_=id=>S.projetos.find(p=>p.id===id);
 const pagoPessoa=(email,mesFiltro)=>S.pagamentos.filter(p=>p.email===email&&(!mesFiltro||p.competencia===mesFiltro)).reduce((a,p)=>a+(+p.valor||0),0);
 function repassesMes(mes){
   const emails=new Set(equipeLista().map(u=>u.email));
@@ -749,11 +767,12 @@ function vRepasses(){
     <div class="card kpi"><div class="label">Falta pagar</div><div class="value" style="color:${cor(R.total-R.pago)}">${brl(R.total-R.pago)}</div><div class="hint">ganho − pago</div></div>
   </div>
   ${sem.length?`<div class="card" style="margin-top:14px;background:var(--warn-soft);border-color:#fcd34d;color:var(--warn)"><b>Falta o valor/hora de:</b> ${sem.map(r=>esc(r.nome)).join(', ')}. Clique no lápis para definir.</div>`:''}
-  <div class="card" style="margin-top:14px;padding:6px 12px"><div class="table-wrap"><table><thead><tr><th>Pessoa</th><th class="num">Horas</th><th class="num">Valor/hora</th><th class="num">Ganhou no mês</th><th class="num">Pago</th><th class="num">Saldo</th><th></th></tr></thead><tbody>
+  <div class="card" style="margin-top:14px;padding:6px 12px"><div class="table-wrap"><table><thead><tr><th>Pessoa</th><th class="num">Sozinho</th><th class="num">Em equipe</th><th class="num">Ganhou no mês</th><th class="num">Pago</th><th class="num">Saldo</th><th></th></tr></thead><tbody>
   ${R.pessoas.map(r=>`<tr><td><b>${esc(r.nome)}</b>${r.email===EU.email?' <span class="tag teal">você</span>':''}
-      <div class="muted" style="font-size:12px">${Object.entries(r.proj).map(([pid,m])=>`${esc(proj(pid)?.nome||'Projeto removido')}: ${hm(m)}`).join(' · ')||'Sem horas no mês'}${r.min?` · sozinho ${hm(r.solo)} · em equipe ${hm(r.min-r.solo)}`:''}</div></td>
-    <td class="num mono"><b>${hm(r.min)}</b></td>
-    <td class="num">${r.taxa?brl(r.taxa):'<span class="muted">—</span>'}</td><td class="num"><b>${brl(r.valor)}</b></td>
+      <div class="muted" style="font-size:12px">${Object.entries(r.proj).map(([pid,m])=>`${esc(proj(pid)?.nome||'Projeto removido')}: ${hm(m)}`).join(' · ')||'Sem horas no mês'}</div></td>
+    <td class="num"><span class="mono"><b>${hm(r.solo)}</b></span><div class="muted" style="font-size:11.5px">${r.solo?(r.taxa?`× ${brl(r.taxa)} = ${brl(r.valorSolo)}`:'sem valor/hora'):(r.taxa?`${brl(r.taxa)}/h`:'')}</div></td>
+    <td class="num"><span class="mono"><b>${hm(r.min-r.solo)}</b></span>${r.eq.map(e=>`<div class="muted" style="font-size:11.5px">${hm(e.min)} × ${brl(e.rate)} <span title="${esc(proj(e.pid)?.nome||'')}">(÷${e.n})</span></div>`).join('')}</td>
+    <td class="num"><b>${brl(r.valor)}</b></td>
     <td class="num">${r.pago?brl(r.pago):'<span class="muted">—</span>'}</td>
     <td class="num"><b style="color:${cor(r.saldo)}">${r.saldo<-0.004?'+'+brl(-r.saldo)+' adiantado':brl(r.saldo)}</b></td>
     <td class="num" style="white-space:nowrap"><button class="btn sm" title="Registrar pagamento" onclick="modalPagamento('${esc(r.email)}','${mes}')">💲 Baixa</button> <button class="btn icon sm" title="Valor/hora" onclick="modalTaxa('${esc(r.email)}')">${ICON.edit}</button></td></tr>`).join('')}
@@ -766,7 +785,7 @@ function vRepasses(){
   <div class="card" style="margin-top:14px"><h2>Acumulado (todos os meses)</h2>
     ${acum.length?`<div class="table-wrap"><table><thead><tr><th>Pessoa</th><th class="num">Horas</th><th class="num">Ganhou</th><th class="num">Recebeu</th><th class="num">Saldo</th></tr></thead><tbody>
     ${acum.map(r=>`<tr><td><b>${esc(r.nome)}</b>${r.email===EU.email?' <span class="tag teal">você</span>':''}</td><td class="num mono">${hm(r.min)}</td><td class="num">${brl(r.valor)}</td><td class="num">${brl(r.pago)}</td><td class="num"><b style="color:${cor(r.saldo)}">${r.saldo<-0.004?'+'+brl(-r.saldo)+' adiantado':brl(r.saldo)}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem movimento ainda</div>'}</div>
-  <p class="muted" style="font-size:12.5px;margin-top:10px">"Ganhou" = horas trabalhadas × valor/hora da pessoa. Use <b>💲 Baixa</b> para registrar o que já foi pago (ou o que você mesmo já recebeu do cliente). Quando duas ou mais pessoas trabalham juntas, cada uma ganha pelas horas dela; o cliente é cobrado pelo tempo do lançamento uma única vez.</p>`;
+  <p class="muted" style="font-size:12.5px;margin-top:10px"><b>Sozinho:</b> horas × valor/hora da pessoa (lápis). <b>Em equipe:</b> valor da hora do projeto já com desconto, dividido pelo número de pessoas no lançamento (ex.: R$ 115 ÷ 2 = R$ 57,50 por hora para cada). Projetos de valor fechado usam o valor/hora da pessoa, a não ser que você defina "Valor da hora em equipe" no projeto. <br>Use <b>💲 Baixa</b> para registrar o que já foi pago (ou o que você mesmo já recebeu do cliente). Quando duas ou mais pessoas trabalham juntas, cada uma ganha pelas horas dela; o cliente é cobrado pelo tempo do lançamento uma única vez.</p>`;
 }
 function modalPagamento(email,mes,id){
   const p=id?S.pagamentos.find(x=>x.id===id):{email:email||EU.email,valor:'',data:new Date().toISOString().slice(0,10),competencia:mes||mesAtual(),obs:''};
@@ -940,6 +959,7 @@ function modalProjeto(id){
        <input id="p-dvv" type="number" step="0.01" min="0" value="${p.descontoValor||''}" placeholder="Valor do desconto">
        <input id="p-dn" style="grid-column:1/-1" value="${esc(p.descontoNome||'')}" placeholder="Nome no demonstrativo (ex.: Desconto parceria)">
      </div><small>Vale para pacote, horas e valor fechado. Não se aplica ao deslocamento. "Valor por hora" só funciona em projetos por hora.</small></div>
+   <div class="field full"><label>Valor da hora em equipe (repasse)</label><input id="p-vhe" type="number" step="0.01" min="0" value="${p.valorHoraEquipe||''}" placeholder="${(()=>{const a=horaEquipeAuto(p);return a!=null?'Automático: '+a.toFixed(2).replace('.',',')+' (hora com desconto)':'Use o valor/hora de cada pessoa'})()}"><small>Quando 2 ou mais pessoas trabalham juntas, este valor é dividido entre elas. Deixe em branco para usar a hora praticada já com desconto.</small></div>
    <div class="field"><label>Deslocamento — ida</label><input id="p-di" type="number" step="0.01" value="${p.deslocIda}"></div>
    <div class="field"><label>Deslocamento — volta</label><input id="p-dv" type="number" step="0.01" value="${p.deslocVolta}"></div>
    <div class="field"><label>Status</label><select id="p-st">${[['ativo','Ativo'],['pausado','Pausado'],['encerrado','Encerrado']].map(([k,l])=>`<option value="${k}" ${p.status===k?'selected':''}>${l}</option>`).join('')}</select></div>
@@ -950,7 +970,7 @@ function modalProjeto(id){
   document.querySelectorAll('.cor-b').forEach(b=>b.onclick=()=>{cor=b.dataset.c;document.querySelectorAll('.cor-b').forEach(x=>x.style.borderColor=x===b?'#14213d':'#fff')});
   $('#p-save').onclick=()=>{
     const nome=$('#p-nome').value.trim();if(!nome){toast('Informe o nome do projeto');return}
-    const dados={nome,cliente:$('#p-cli').value.trim(),contato:$('#p-cont').value.trim(),tipo,valorCheio:+$('#p-cheio').value||0,valorHora:+$('#p-vh').value||0,franquia:+$('#p-fr').value||0,valorExcedente:+$('#p-exc').value||0,pacoteMinimo:$('#p-min').checked,valorFechado:+$('#p-vf').value||0,deslocIda:+$('#p-di').value||0,deslocVolta:+$('#p-dv').value||0,status:$('#p-st').value,cor,descontoTipo:$('#p-dt').value,descontoValor:+$('#p-dvv').value||0,descontoNome:$('#p-dn').value.trim()};
+    const dados={nome,cliente:$('#p-cli').value.trim(),contato:$('#p-cont').value.trim(),tipo,valorCheio:+$('#p-cheio').value||0,valorHora:+$('#p-vh').value||0,franquia:+$('#p-fr').value||0,valorExcedente:+$('#p-exc').value||0,pacoteMinimo:$('#p-min').checked,valorFechado:+$('#p-vf').value||0,deslocIda:+$('#p-di').value||0,deslocVolta:+$('#p-dv').value||0,status:$('#p-st').value,cor,descontoTipo:$('#p-dt').value,descontoValor:+$('#p-dvv').value||0,descontoNome:$('#p-dn').value.trim(),valorHoraEquipe:+$('#p-vhe').value||0};
     if(id)Object.assign(proj(id),dados);else{const n={id:uid(),inicio:new Date().toISOString(),...dados};S.projetos.push(n);ctx={id:n.id};view='projeto'}
     save();closeModal();render();toast('Projeto salvo');
   };
