@@ -726,7 +726,7 @@ function horaEquipeAuto(p){
   return Math.max(0,Math.round(v*100)/100);
 }
 const horaEquipe=p=>(p&&+p.valorHoraEquipe>0)?+p.valorHoraEquipe:horaEquipeAuto(p);
-function ganhoPessoa(email,mesFiltro,pidFiltro){
+function ganhoBase(email,mesFiltro,pidFiltro){
   const taxa=+S.repasses[email]||0;
   let min=0,solo=0,vSolo=0,vEq=0;const proj={},eq={};
   S.lancamentos.forEach(l=>{
@@ -741,6 +741,17 @@ function ganhoPessoa(email,mesFiltro,pidFiltro){
   return {min,solo,proj,taxa:taxaSolo,eq:Object.values(eq),valorSolo:r2(vSolo),valorEquipe:r2(vEq),valor:r2(vSolo+vEq)};
 }
 const proj_=id=>S.projetos.find(p=>p.id===id);
+// Dono: recebe tudo o que sobra do faturado depois de pagar a equipe (por projeto e mês)
+function ganhoPessoa(email,mes,pid){
+  const g=ganhoBase(email,mes,pid);if(email!==DONO)return g;
+  const r2=v=>Math.round(v*100)/100;let v=0;
+  const pares=new Set(S.lancamentos.filter(l=>(!mes||mesKey(l.inicio)===mes)&&(!pid||l.projetoId===pid)).map(l=>l.projetoId+'|'+mesKey(l.inicio)));
+  pares.forEach(k=>{const [pj,m]=k.split('|');const p=proj_(pj);if(!p)return;
+    const fat=calcular(p,lancsDe(pj,m)).total;const outros=new Set();
+    S.lancamentos.filter(l=>l.projetoId===pj&&mesKey(l.inicio)===m).forEach(l=>partsDe(l).forEach(e=>{if(e!==DONO)outros.add(e)}));
+    let o=0;outros.forEach(e=>o+=ganhoBase(e,m,pj).valor);v+=fat-o});
+  v=r2(v);return {...g,horasValor:g.valor,extra:r2(v-g.valor),valor:v};
+}
 const pagoPessoa=(email,mesFiltro,pidFiltro)=>S.pagamentos.filter(p=>p.email===email&&(!mesFiltro||p.competencia===mesFiltro)&&(!pidFiltro||p.projetoId===pidFiltro)).reduce((a,p)=>a+(+p.valor||0),0);
 function repassesMes(mes,pid){
   const emails=new Set(pid?[]:equipeLista().map(u=>u.email));
@@ -754,22 +765,22 @@ const corSaldo=v=>v>0.004?'var(--warn)':v<-0.004?'var(--blue)':'var(--ok)';
 const txtSaldo=v=>v<-0.004?'+'+brl(-v)+' adiantado':brl(v);
 function blocoRepasseProjeto(p,mes){
   const R=repassesMes(mes,p.id);const c=calcular(p,lancsDe(p.id,mes));
-  const sobra=c.total-R.total;
+  const eu=R.pessoas.find(x=>x.email===DONO)||{valor:0,horasValor:0,extra:0};const equipe=Math.round((R.total-eu.valor)*100)/100;
   const pags=S.pagamentos.filter(x=>x.competencia===mes&&x.projetoId===p.id).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
   return `<div class="card" style="margin-top:14px">
     <div class="row between wrap"><h2 style="display:flex;align-items:center;gap:8px;margin:0"><span class="dot" style="background:${p.cor}"></span>${esc(p.nome)}</h2>
       <button class="btn sm primary" onclick="modalPagamento('','${mes}','','${p.id}')">${ICON.plus} Registrar pagamento</button></div>
     <div class="grid kpis" style="margin-top:12px">
       <div class="card kpi" style="box-shadow:none"><div class="label">Faturado</div><div class="value">${brl(c.total)}</div><div class="hint">serviços ${brl(c.servicosLiquido)}${c.desloc?' + desloc. '+brl(c.desloc):''} · ${hm(c.minutos)}</div></div>
-      <div class="card kpi" style="box-shadow:none"><div class="label">A pagar à equipe</div><div class="value">${brl(R.total)}</div><div class="hint">hora em equipe: ${horaEquipe(p)!=null?brl(horaEquipe(p))+' ÷ pessoas':'valor/hora de cada um'}</div></div>
+      <div class="card kpi" style="box-shadow:none"><div class="label">A pagar à equipe</div><div class="value">${brl(equipe)}</div><div class="hint">hora em equipe: ${horaEquipe(p)!=null?brl(horaEquipe(p))+' ÷ pessoas':'valor/hora de cada um'}</div></div>
       <div class="card kpi" style="box-shadow:none"><div class="label">Já pago</div><div class="value">${brl(R.pago)}</div><div class="hint">falta ${brl(Math.max(0,R.total-R.pago))}</div></div>
-      <div class="card kpi" style="box-shadow:none"><div class="label">Sua margem</div><div class="value" style="color:${sobra>=0?'var(--ok)':'var(--danger)'}">${brl(sobra)}</div><div class="hint">faturado − equipe · total seu: ${brl(((R.pessoas.find(x=>x.email===DONO)||{}).valor||0)+sobra)}</div></div>
+      <div class="card kpi" style="box-shadow:none"><div class="label">Fica para você</div><div class="value" style="color:${eu.valor>=0?'var(--ok)':'var(--danger)'}">${brl(eu.valor)}</div><div class="hint">faturado − equipe${eu.extra?` · suas horas ${brl(eu.horasValor)} + extra ${brl(eu.extra)}`:''}</div></div>
     </div>
     ${R.pessoas.length?`<div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Pessoa</th><th class="num">Sozinho</th><th class="num">Em equipe</th><th class="num">A receber</th><th class="num">Pago</th><th class="num">Saldo</th><th></th></tr></thead><tbody>
     ${R.pessoas.map(r=>`<tr><td><b>${esc(r.nome)}</b>${r.email===EU.email?' <span class="tag teal">você</span>':''}${r.min&&!r.taxa&&r.solo?'<div style="font-size:11.5px;color:var(--warn)">sem valor/hora para horas sozinho</div>':''}</td>
       <td class="num"><span class="mono"><b>${hm(r.solo)}</b></span><div class="muted" style="font-size:11.5px">${r.solo?`× ${brl(r.taxa)} = ${brl(r.valorSolo)}`:''}</div></td>
       <td class="num"><span class="mono"><b>${hm(r.min-r.solo)}</b></span>${r.eq.map(e=>`<div class="muted" style="font-size:11.5px">${hm(e.min)} × ${brl(e.rate)} (÷${e.n})</div>`).join('')}</td>
-      <td class="num"><b>${brl(r.valor)}</b></td><td class="num">${r.pago?brl(r.pago):'<span class="muted">—</span>'}</td>
+      <td class="num"><b>${brl(r.valor)}</b>${r.extra?`<div class="muted" style="font-size:11.5px">inclui extra ${brl(r.extra)}</div>`:''}</td><td class="num">${r.pago?brl(r.pago):'<span class="muted">—</span>'}</td>
       <td class="num"><b style="color:${corSaldo(r.saldo)}">${txtSaldo(r.saldo)}</b></td>
       <td class="num" style="white-space:nowrap"><button class="btn sm" onclick="modalPagamento('${esc(r.email)}','${mes}','','${p.id}')">💲 Baixa</button> <button class="btn icon sm" title="Valor/hora" onclick="modalTaxa('${esc(r.email)}')">${ICON.edit}</button></td></tr>`).join('')}
     <tr><td colspan="3" style="text-align:right"><b>Total</b></td><td class="num"><b>${brl(R.total)}</b></td><td class="num"><b>${brl(R.pago)}</b></td><td class="num"><b>${brl(R.total-R.pago)}</b></td><td></td></tr>
@@ -781,7 +792,7 @@ function vRepasses(){
   if(!isAdmin())return '<div class="card empty">Acesso restrito ao administrador.</div>';
   const mes=ctx.mes||mesAtual(), pid=ctx.pid||'';
   const ativos=S.projetos.filter(p=>p.id===pid||(!pid&&(lancsDe(p.id,mes).length||S.pagamentos.some(x=>x.competencia===mes&&x.projetoId===p.id)||(p.status==='ativo'&&p.tipo==='hora'&&p.pacoteMinimo))));
-  let fat=0,eq=0,pago=0;ativos.forEach(p=>{fat+=calcular(p,lancsDe(p.id,mes)).total;const R=repassesMes(mes,p.id);eq+=R.total;pago+=R.pago});
+  let fat=0,eq=0,pago=0,meu=0;ativos.forEach(p=>{fat+=calcular(p,lancsDe(p.id,mes)).total;const R=repassesMes(mes,p.id);const eu=R.pessoas.find(x=>x.email===DONO);meu+=eu?eu.valor:0;eq+=R.total-(eu?eu.valor:0);pago+=R.pago});
   const semProj=S.pagamentos.filter(x=>x.competencia===mes&&!x.projetoId);
   const acum=[...new Set([...equipeLista().map(u=>u.email),...S.pagamentos.map(p=>p.email)])].map(e=>{const g=ganhoPessoa(e),pg=pagoPessoa(e);return {email:e,nome:nomeDe(e),valor:g.valor,min:g.min,pago:pg,saldo:Math.round((g.valor-pg)*100)/100}}).filter(r=>r.min||r.pago).sort((a,b)=>a.nome.localeCompare(b.nome));
   return `<div class="top"><div><h1>Repasses</h1><div class="sub">Por projeto: quanto foi faturado e quanto pagar a cada pessoa da equipe (incluindo você)</div></div></div>
@@ -793,14 +804,14 @@ function vRepasses(){
     <div class="card kpi"><div class="label">Faturado (todos)</div><div class="value">${brl(fat)}</div></div>
     <div class="card kpi"><div class="label">A pagar à equipe</div><div class="value">${brl(eq)}</div></div>
     <div class="card kpi"><div class="label">Já pago</div><div class="value">${brl(pago)}</div></div>
-    <div class="card kpi"><div class="label">Sobra</div><div class="value" style="color:${fat-eq>=0?'var(--ok)':'var(--danger)'}">${brl(fat-eq)}</div></div></div>`:''}
+    <div class="card kpi"><div class="label">Fica para você</div><div class="value" style="color:${meu>=0?'var(--ok)':'var(--danger)'}">${brl(meu)}</div></div></div>`:''}
   ${ativos.map(p=>blocoRepasseProjeto(p,mes)).join('')||'<div class="card empty" style="margin-top:14px">Nenhum projeto com movimento nesta competência</div>'}
   ${semProj.length?`<div class="card" style="margin-top:14px;background:var(--warn-soft);border-color:#fcd34d"><b style="color:var(--warn)">Pagamentos sem projeto</b> — edite para escolher o projeto:
     <div class="table-wrap"><table><tbody>${semProj.map(x=>`<tr><td>${x.data?fdata(x.data+'T12:00'):'—'}</td><td><b>${esc(nomeDe(x.email))}</b></td><td class="muted">${esc(x.obs||'')}</td><td class="num"><b>${brl(+x.valor)}</b></td><td class="num"><button class="btn icon sm" onclick="modalPagamento('${esc(x.email)}','${mes}','${x.id}')">${ICON.edit}</button></td></tr>`).join('')}</tbody></table></div></div>`:''}
   <div class="card" style="margin-top:14px"><h2>Acumulado por pessoa (todos os projetos e meses)</h2>
     ${acum.length?`<div class="table-wrap"><table><thead><tr><th>Pessoa</th><th class="num">Horas</th><th class="num">Ganhou</th><th class="num">Recebeu</th><th class="num">Saldo</th></tr></thead><tbody>
     ${acum.map(r=>`<tr><td><b>${esc(r.nome)}</b>${r.email===EU.email?' <span class="tag teal">você</span>':''}</td><td class="num mono">${hm(r.min)}</td><td class="num">${brl(r.valor)}</td><td class="num">${brl(r.pago)}</td><td class="num"><b style="color:${corSaldo(r.saldo)}">${txtSaldo(r.saldo)}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem movimento ainda</div>'}</div>
-  <p class="muted" style="font-size:12.5px;margin-top:10px"><b>Sozinho:</b> horas × valor/hora da pessoa (lápis). <b>Em equipe:</b> valor da hora do projeto já com desconto ÷ número de pessoas no lançamento. Cada pagamento (💲 Baixa) fica ligado a um projeto.</p>`;
+  <p class="muted" style="font-size:12.5px;margin-top:10px"><b>Sozinho:</b> horas × valor/hora da pessoa (lápis). <b>Em equipe:</b> valor da hora do projeto já com desconto ÷ número de pessoas no lançamento. <b>Você:</b> recebe tudo o que sobra do faturado depois de pagar a equipe (suas horas + extra). Cada pagamento (💲 Baixa) fica ligado a um projeto.</p>`;
 }
 function modalPagamento(email,mes,id,pidPadrao){
   const p=id?S.pagamentos.find(x=>x.id===id):{email:email||EU.email,valor:'',data:new Date().toISOString().slice(0,10),competencia:mes||mesAtual(),obs:'',projetoId:pidPadrao||ctx.pid||''};
